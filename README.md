@@ -80,10 +80,21 @@ cd StepOut
 2. Install dependencies:
 ```bash
 npm install
+cd client
+npm install
+cd ../server
+npm install
+cd ..
+```
+3. Configure environment variables:
+Create a .env file in the server directory
+```bash
+DATABASE_URL=your_postgresql_connection_string
+JWT_SECRET=your_jwt_secret
+PORT=300
 ```
 
-
-3. Run the project locally:
+4. Run the project locally:
 ```bash
 npm start
 ```
