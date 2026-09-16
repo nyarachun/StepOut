@@ -12,6 +12,8 @@ Administrators can moderate platform events and ban events with a specified reas
 
 The application supports three user roles: **user**, **organizer**, and **admin**, each with different permissions and functionality.
 
+**Note:** When opening the application for the first time, loading events may take a little longer because the backend server may need to wake up. Please wait while the events are being loaded.
+
 ### Test Accounts
 
 You can create a new account through the registration page or use the following test accounts to explore different roles:
