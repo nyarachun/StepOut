@@ -44,6 +44,11 @@ Password: User12345!
 Experience the live website: [StepOut Demo](https://nyarachun.github.io/StepOut/)
 
 ## Technologies Used
+## Deployment
+
+- **Frontend:** Hosted on GitHub Pages
+- **Backend:** Hosted on Render (Web Service)
+- **Database:** Serverless PostgreSQL hosted on Neon
 
 ### Frontend
 
