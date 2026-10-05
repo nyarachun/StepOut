@@ -73,6 +73,9 @@ Experience the live website: [StepOut Demo](https://nyarachun.github.io/StepOut/
 - **bcrypt** (v6.0.0) – Password hashing
 - **Socket.IO** – Real-time communication
 - **NestJS WebSockets** (v12.0.1) – WebSocket integration
+- **NestJS Pino / Pino** (v5.3.1 / v10.4.0) – Logging system
+- **Swagger / @nestjs/swagger** (v12.0.1) – API documentation
+- **Docker** – Containerization
 
 ## Getting Started
 
