@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   ParseIntPipe,
   Post,
@@ -21,6 +22,8 @@ type CurrentUserData = {
 @Controller('favorites')
 @UseGuards(AuthGuard('jwt'))
 export class FavoritesController {
+  private readonly logger = new Logger(FavoritesController.name);
+
   constructor(private readonly favoritesService: FavoritesService) {}
 
   @Post()
@@ -28,6 +31,7 @@ export class FavoritesController {
     @CurrentUser() user: CurrentUserData,
     @Body() createFavoriteDto: CreateFavoriteDto,
   ) {
+    this.logger.log({ userId: user.id, eventId: createFavoriteDto.eventId }, 'User added event to favorites');
     return this.favoritesService.create(user.id, createFavoriteDto);
   }
 
@@ -41,6 +45,7 @@ export class FavoritesController {
     @CurrentUser() user: CurrentUserData,
     @Param('eventId', ParseIntPipe) eventId: number,
   ) {
+    this.logger.log({ userId: user.id, eventId }, 'User removed event from favorites');
     return this.favoritesService.remove(user.id, eventId);
   }
 }

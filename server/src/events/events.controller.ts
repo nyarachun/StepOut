@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Logger,
   Param,
   ParseIntPipe,
   Patch,
@@ -30,6 +31,8 @@ type CurrentUserData = {
 
 @Controller('events')
 export class EventsController {
+  private readonly logger = new Logger(EventsController.name);
+
   constructor(private readonly eventsService: EventsService) {}
 
   @Get()
@@ -39,9 +42,8 @@ export class EventsController {
 
   @Get('my')
   @UseGuards(AuthGuard('jwt'))
-  findMyEvents(
-    @CurrentUser() user: { id: number; role: string },
-  ) {
+  findMyEvents(@CurrentUser() user: { id: number; role: string }) {
+    this.logger.debug({ userId: user.id }, 'Fetching my events');
     return this.eventsService.findMyEvents(user.id, user.role);
   }
 
@@ -51,6 +53,7 @@ export class EventsController {
     @CurrentUser() user: { id: number; role: string },
     @Body() createEventDto: CreateEventDto,
   ) {
+    this.logger.log({ userId: user.id }, 'Creating new event');
     return this.eventsService.create(user.id, user.role, createEventDto);
   }
 
@@ -66,12 +69,8 @@ export class EventsController {
     @CurrentUser() user: { id: number; role: string },
     @Body() updateEventDto: UpdateEventDto,
   ) {
-    return this.eventsService.updateForOrganizer(
-      id,
-      user.id,
-      user.role,
-      updateEventDto,
-    );
+    this.logger.log({ eventId: id, userId: user.id }, 'Organizer updating event');
+    return this.eventsService.updateForOrganizer(id, user.id, user.role, updateEventDto);
   }
 
   @Delete(':id')
@@ -80,6 +79,7 @@ export class EventsController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: { id: number; role: string },
   ) {
+    this.logger.log({ eventId: id, userId: user.id }, 'Organizer deleting event');
     return this.eventsService.removeForOrganizer(id, user.id, user.role);
   }
 
@@ -91,6 +91,7 @@ export class EventsController {
     @CurrentUser() user: CurrentUserData,
     @Body() updateEventDto: UpdateEventDto,
   ) {
+    this.logger.log({ eventId: id, userId: user.id, role: user.role }, 'Admin/Organizer updating event');
     return this.eventsService.update(id, user.id, user.role, updateEventDto);
   }
 
@@ -101,6 +102,7 @@ export class EventsController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: CurrentUserData,
   ) {
+    this.logger.log({ eventId: id, userId: user.id, role: user.role }, 'Admin/Organizer deleting event');
     return this.eventsService.remove(id, user.id, user.role);
   }
 }

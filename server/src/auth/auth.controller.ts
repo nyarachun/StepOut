@@ -1,34 +1,27 @@
-import {
-    Body,
-    Controller,
-    Post,
-} from '@nestjs/common';
-
+import { Body, Controller, Post, Logger } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-    constructor(
-        private readonly authService: AuthService,
-    ) {}
+  private readonly logger = new Logger(AuthController.name);
+  
+  constructor(private readonly authService: AuthService) {}
 
-    @Post('register')
-    register(
-        @Body() registerDto: RegisterDto,
-    ) {
-        return this.authService.register(
-            registerDto,
-        );
-    }
+  @Post('register')
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiResponse({ status: 201, description: 'User successfully registered.' })
+  register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
 
-    @Post('login')
-    login(
-        @Body() loginDto: LoginDto,
-    ) {
-        return this.authService.login(
-            loginDto,
-        );
-    }
+  @Post('login')
+  @ApiOperation({ summary: 'Login user' })
+  @ApiResponse({ status: 201, description: 'User successfully logged in.' })
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
 }

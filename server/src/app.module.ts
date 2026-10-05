@@ -12,9 +12,26 @@ import { AchievementsModule } from './achievements/achievements.module.js';
 import { ChatsModule } from './chats/chats.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { RemoveSquadsMigration20260914000000 } from './db/migrations/remove-squads.migration.js';
+import { LoggerModule } from 'nestjs-pino';
 
 @Module({
   imports: [
+    LoggerModule.forRoot({
+      
+      pinoHttp: {
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+        transport: process.env.NODE_ENV !== 'production'
+          ? {
+              target: 'pino-pretty',
+              options: {
+                singleLine: true,
+                colorize: true,
+              },
+            }
+          : undefined,
+      },
+    }),
+
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -24,7 +41,6 @@ import { RemoveSquadsMigration20260914000000 } from './db/migrations/remove-squa
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
       synchronize: true,
-      migrations: [RemoveSquadsMigration20260914000000],
       migrationsRun: true,
     }),
 
