@@ -17,6 +17,17 @@ import { api } from '../../api/api';
 
 import './Register.scss';
 
+const NAME_MIN_LENGTH = 2;
+const NAME_MAX_LENGTH = 50;
+const EMAIL_MAX_LENGTH = 254;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 64;
+
+const emailRegex =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const nameRegex = /^[A-Za-zА-Яа-яІіЇїЄєҐґ' -]+$/;
+
 const Register = () => {
     const navigate = useNavigate();
 
@@ -50,15 +61,91 @@ const Register = () => {
         event.preventDefault();
 
         setError('');
-        if (password !== confirmPassword) {
-            setError('Passwords do not match.');
+
+        const trimmedName = name.trim();
+        const trimmedEmail =
+            email.trim();
+
+        if (
+            trimmedName.length <
+            NAME_MIN_LENGTH
+        ) {
+            setError(
+                `Name must contain at least ${NAME_MIN_LENGTH} characters.`,
+            );
 
             return;
         }
 
-        if (password.length < 8) {
+        if (
+            trimmedName.length >
+            NAME_MAX_LENGTH
+        ) {
             setError(
-                'Password must contain at least 8 characters.',
+                `Name must not exceed ${NAME_MAX_LENGTH} characters.`,
+            );
+
+            return;
+        }
+
+        if (!nameRegex.test(trimmedName)) {
+            setError(
+                'Name can contain only letters, spaces, hyphens and apostrophes.',
+            );
+
+            return;
+        }
+
+        if (!trimmedEmail) {
+            setError('Email is required.');
+
+            return;
+        }
+
+        if (
+            trimmedEmail.length >
+            EMAIL_MAX_LENGTH
+        ) {
+            setError(
+                `Email must not exceed ${EMAIL_MAX_LENGTH} characters.`,
+            );
+
+            return;
+        }
+
+        if (!emailRegex.test(trimmedEmail)) {
+            setError(
+                'Please enter a valid email address.',
+            );
+
+            return;
+        }
+
+        if (
+            password.length <
+            PASSWORD_MIN_LENGTH
+        ) {
+            setError(
+                `Password must contain at least ${PASSWORD_MIN_LENGTH} characters.`,
+            );
+
+            return;
+        }
+
+        if (
+            password.length >
+            PASSWORD_MAX_LENGTH
+        ) {
+            setError(
+                `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
+            );
+
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            setError(
+                'Passwords do not match.',
             );
 
             return;
@@ -68,27 +155,41 @@ const Register = () => {
 
         try {
             await api.post('/auth/register', {
-                name,
-                email,
+                name: trimmedName,
+                email: trimmedEmail,
                 password,
                 role,
             });
 
             navigate('/login', {
-                state: { email },
+                state: {
+                    email: trimmedEmail,
+                },
             });
         } catch (requestError) {
-            if (axios.isAxiosError(requestError)) {
+            if (
+                axios.isAxiosError(
+                    requestError,
+                )
+            ) {
                 const errorMessage =
-                    requestError.response?.data?.message;
+                    requestError.response
+                        ?.data?.message;
 
                 setError(
-                    Array.isArray(errorMessage)
-                        ? errorMessage.join(', ')
-                        : errorMessage || 'Registration failed.',
+                    Array.isArray(
+                        errorMessage,
+                    )
+                        ? errorMessage.join(
+                              ', ',
+                          )
+                        : errorMessage ||
+                              'Registration failed.',
                 );
             } else {
-                setError('Registration failed.');
+                setError(
+                    'Registration failed.',
+                );
             }
         } finally {
             setIsLoading(false);
@@ -139,11 +240,18 @@ const Register = () => {
                                     event,
                                 ) =>
                                     setName(
-                                        event.target
+                                        event
+                                            .target
                                             .value,
                                     )
                                 }
                                 placeholder="Your name"
+                                minLength={
+                                    NAME_MIN_LENGTH
+                                }
+                                maxLength={
+                                    NAME_MAX_LENGTH
+                                }
                                 required
                             />
                         </div>
@@ -161,11 +269,15 @@ const Register = () => {
                                     event,
                                 ) =>
                                     setEmail(
-                                        event.target
+                                        event
+                                            .target
                                             .value,
                                     )
                                 }
                                 placeholder="you@example.com"
+                                maxLength={
+                                    EMAIL_MAX_LENGTH
+                                }
                                 required
                             />
                         </div>
@@ -182,10 +294,11 @@ const Register = () => {
                                     event,
                                 ) =>
                                     setRole(
-                                        event.target
+                                        event
+                                            .target
                                             .value as
-                                        | 'user'
-                                        | 'organizer',
+                                            | 'user'
+                                            | 'organizer',
                                     )
                                 }
                             >
@@ -219,11 +332,18 @@ const Register = () => {
                                         event,
                                     ) =>
                                         setPassword(
-                                            event.target
+                                            event
+                                                .target
                                                 .value,
                                         )
                                     }
                                     placeholder="At least 8 characters"
+                                    minLength={
+                                        PASSWORD_MIN_LENGTH
+                                    }
+                                    maxLength={
+                                        PASSWORD_MAX_LENGTH
+                                    }
                                     required
                                 />
 
@@ -282,6 +402,12 @@ const Register = () => {
                                         )
                                     }
                                     placeholder="Repeat your password"
+                                    minLength={
+                                        PASSWORD_MIN_LENGTH
+                                    }
+                                    maxLength={
+                                        PASSWORD_MAX_LENGTH
+                                    }
                                     required
                                 />
 
