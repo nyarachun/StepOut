@@ -41,7 +41,8 @@ Password: User12345!
 
 ## Live Preview
 
-Experience the live website: [StepOut Demo](https://nyarachun.github.io/StepOut/)
+- **Frontend:** [StepOut Demo](https://nyarachun.github.io/StepOut/)
+- **Backend API:** [Swagger API Documentation](https://stepout-events.onrender.com/api/docs)
 
 ## Technologies Used
 ## Deployment
