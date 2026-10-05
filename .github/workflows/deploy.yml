@@ -1,4 +1,4 @@
-name: Deploy StepOut
+name: Deploy Events
 
 on:
   push:
