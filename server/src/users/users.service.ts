@@ -1,7 +1,9 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -24,174 +26,126 @@ export class UsersService {
   ) {}
 
   private async findUserById(id: number) {
-    const user = await this.userRepository.findOneBy({
-      id,
-    });
+    try {
+      const user = await this.userRepository.findOneBy({ id });
 
-    if (!user) {
-      throw new NotFoundException(
-        `User with id ${id} not found`,
-      );
+      if (!user) {
+        throw new NotFoundException(`User with id ${id} not found`);
+      }
+
+      return user;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch user');
     }
-
-    return user;
   }
 
   async create(createUserDto: CreateUserDto) {
-    const {
-      email,
-      password,
-      name,
-      role,
-    }: CreateUserDto = createUserDto;
+    const { email, password, name, role } = createUserDto;
 
-    const existingUser =
-      await this.userRepository.findOneBy({
-        email,
-      });
+    try {
+      const existingUser = await this.userRepository.findOneBy({ email });
 
-    if (existingUser) {
-      throw new ConflictException(
-        'User with this email already exists',
-      );
-    }
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
 
-    const hashedPassword =
-      await bcrypt.hash(
-        password,
-        this.SALT_ROUNDS,
-      );
+      const hashedPassword = await bcrypt.hash(password, this.SALT_ROUNDS);
 
-    const user =
-      this.userRepository.create({
+      const user = this.userRepository.create({
         email,
         password: hashedPassword,
         name,
         role,
       });
 
-    const savedUser =
-      await this.userRepository.save(user);
+      const savedUser = await this.userRepository.save(user);
 
-    const {
-      password: _password,
-      ...userWithoutPassword
-    } = savedUser;
+      const { password: _password, ...userWithoutPassword } = savedUser;
 
-    return userWithoutPassword;
+      return userWithoutPassword;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to create user');
+    }
   }
 
   async findAll() {
-    const users =
-      await this.userRepository.find();
+    try {
+      const users = await this.userRepository.find();
 
-    return users.map(
-      ({
-        password: _password,
-        ...user
-      }) => user,
-    );
+      return users.map(({ password: _password, ...user }) => user);
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch users');
+    }
   }
 
   async findOne(id: number) {
-    const user =
-      await this.userRepository.findOne({
+    try {
+      const user = await this.userRepository.findOne({
         where: { id },
       });
 
-    if (!user) {
-      throw new NotFoundException(
-        `User with id ${id} not found`,
-      );
-    }
+      if (!user) {
+        throw new NotFoundException(`User with id ${id} not found`);
+      }
 
-    return user;
+      return user;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch user');
+    }
   }
 
-  async findOneForUser(
-    id: number,
-    currentUserId: number,
-    currentUserRole: UserRole,
-  ) {
-    if (
-      currentUserRole !== UserRole.ADMIN &&
-      id !== currentUserId
-    ) {
-      throw new ForbiddenException(
-        'You can only view your own profile',
-      );
+  async findOneForUser(id: number, currentUserId: number, currentUserRole: UserRole) {
+    if (currentUserRole !== UserRole.ADMIN && id !== currentUserId) {
+      throw new ForbiddenException('You can only view your own profile');
     }
 
     return this.findOne(id);
   }
 
   async findByEmail(email: string) {
-    return this.userRepository
-      .createQueryBuilder('user')
-      .addSelect('user.password')
-      .where(
-        'user.email = :email',
-        { email },
-      )
-      .getOne();
+    try {
+      return await this.userRepository
+        .createQueryBuilder('user')
+        .addSelect('user.password')
+        .where('user.email = :email', { email })
+        .getOne();
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch user by email');
+    }
   }
 
-  async update(
-    id: number,
-    updateUserDto: UpdateUserDto,
-  ) {
-    const user =
-      await this.findUserById(id);
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.findUserById(id);
 
-    const {
-      email,
-      name,
-      bio,
-      interests,
-    }: UpdateUserDto = updateUserDto;
+    const { email, name, bio, interests } = updateUserDto;
 
-    if (
-      email !== undefined &&
-      email !== user.email
-    ) {
-      const existingUser =
-        await this.userRepository.findOneBy({
-          email,
-        });
+    try {
+      if (email !== undefined && email !== user.email) {
+        const existingUser = await this.userRepository.findOneBy({ email });
 
-      if (
-        existingUser &&
-        existingUser.id !== id
-      ) {
-        throw new ConflictException(
-          'User with this email already exists',
-        );
+        if (existingUser && existingUser.id !== id) {
+          throw new ConflictException('User with this email already exists');
+        }
+
+        user.email = email;
       }
 
-      user.email = email;
+      if (name !== undefined) user.name = name;
+      if (bio !== undefined) user.bio = bio;
+      if (interests !== undefined) user.interests = interests;
+
+      const updatedUser = await this.userRepository.save(user);
+
+      const { password: _password, ...userWithoutPassword } = updatedUser;
+
+      return userWithoutPassword;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to update user profile');
     }
-
-    if (name !== undefined) {
-      user.name = name;
-    }
-
-    if (bio !== undefined) {
-      user.bio = bio;
-    }
-
-    if (interests !== undefined) {
-      user.interests = interests;
-    }
-
-    const updatedUser =
-      await this.userRepository.save(user);
-
-    const {
-      password: _password,
-      ...userWithoutPassword
-    } = updatedUser;
-
-    return userWithoutPassword;
   }
 
   async updateForUser(
@@ -200,19 +154,11 @@ export class UsersService {
     currentUserRole: UserRole,
     updateUserDto: UpdateUserDto,
   ) {
-    if (
-      id !== currentUserId &&
-      currentUserRole !== UserRole.ADMIN
-    ) {
-      throw new ForbiddenException(
-        'You can only edit your own profile',
-      );
+    if (id !== currentUserId && currentUserRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('You can only edit your own profile');
     }
 
-    return this.update(
-      id,
-      updateUserDto,
-    );
+    return this.update(id, updateUserDto);
   }
 
   async changePassword(
@@ -221,86 +167,52 @@ export class UsersService {
     currentUserRole: UserRole,
     changePasswordDto: ChangePasswordDto,
   ) {
-    if (
-      id !== currentUserId &&
-      currentUserRole !== UserRole.ADMIN
-    ) {
-      throw new ForbiddenException(
-        'You can only change your own password',
-      );
+    if (id !== currentUserId && currentUserRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('You can only change your own password');
     }
 
-    const user =
-      await this.userRepository
+    try {
+      const user = await this.userRepository
         .createQueryBuilder('user')
         .addSelect('user.password')
         .where('user.id = :id', { id })
         .getOne();
 
-    if (!user) {
-      throw new NotFoundException(
-        `User with id ${id} not found`,
-      );
-    }
+      if (!user) {
+        throw new NotFoundException(`User with id ${id} not found`);
+      }
 
-    const isCurrentPasswordCorrect =
-      await bcrypt.compare(
+      const isCurrentPasswordCorrect = await bcrypt.compare(
         changePasswordDto.currentPassword,
         user.password,
       );
 
-    if (!isCurrentPasswordCorrect) {
-      throw new UnauthorizedException(
-        'Current password is incorrect',
-      );
+      if (!isCurrentPasswordCorrect) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      if (changePasswordDto.newPassword !== changePasswordDto.confirmPassword) {
+        throw new ConflictException('New passwords do not match');
+      }
+
+      user.password = await bcrypt.hash(changePasswordDto.newPassword, this.SALT_ROUNDS);
+
+      await this.userRepository.save(user);
+
+      return { message: 'Password changed successfully' };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to change password');
     }
-
-    if (
-      changePasswordDto.newPassword !==
-      changePasswordDto.confirmPassword
-    ) {
-      throw new ConflictException(
-        'New passwords do not match',
-      );
-    }
-
-    user.password =
-      await bcrypt.hash(
-        changePasswordDto.newPassword,
-        this.SALT_ROUNDS,
-      );
-
-    await this.userRepository.save(
-      user,
-    );
-
-    return {
-      message:
-        'Password changed successfully',
-    };
   }
 
-  async updatePassword(
-    id: number,
-    hashedPassword: string,
-) {
-    const user =
-        await this.findUserById(id);
-
-    user.password = hashedPassword;
-
-    await this.userRepository.save(user);
-
-    return {
-        message:
-            'Password updated successfully',
-    };
-}
-
   async remove(id: number) {
-    const user =
-      await this.findUserById(id);
+    const user = await this.findUserById(id);
 
-    await this.userRepository.remove(user);
+    try {
+      await this.userRepository.remove(user);
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete user');
+    }
   }
 }

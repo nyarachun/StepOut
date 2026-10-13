@@ -1,29 +1,18 @@
-import {
-    CircleHelp,
-} from 'lucide-react';
-import {
-    useEffect,
-    useRef,
-    useState,
-} from 'react';
+import axios from 'axios';
+import { CircleHelp } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 import { getEvents } from '../../api/events';
 import { useCity } from '../../context/CityContext';
-import {
-    EventCard,
-    type EventCardData,
-} from '../EventCard/EventCard';
+import { EventCard, type EventCardData } from '../EventCard/EventCard';
 
 import './EventRoulette.scss';
 
 export const EventRoulette = () => {
     const { selectedCity } = useCity();
     const [budget, setBudget] = useState(1000);
-    const [events, setEvents] = useState<EventCardData[]>(
-        [],
-    );
-    const [selectedEvent, setSelectedEvent] =
-        useState<EventCardData | null>(null);
+    const [events, setEvents] = useState<EventCardData[]>([]);
+    const [selectedEvent, setSelectedEvent] = useState<EventCardData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRolling, setIsRolling] = useState(false);
     const [loadError, setLoadError] = useState(false);
@@ -40,7 +29,7 @@ export const EventRoulette = () => {
             };
         }
 
-        let isCurrentRequest = true;
+        const controller = new AbortController();
 
         const loadEvents = async () => {
             setIsLoading(true);
@@ -49,33 +38,21 @@ export const EventRoulette = () => {
             setIsRolling(false);
 
             try {
-                const data = await getEvents({ cityId });
-
-                if (isCurrentRequest) {
-                    setEvents(data);
-                }
+                const data = await getEvents({ cityId }, { signal: controller.signal });
+                setEvents(data);
             } catch (error) {
-                if (isCurrentRequest) {
-                    setEvents([]);
-                    setLoadError(true);
-                }
-
-                console.error(
-                    'Failed to load events',
-                    error,
-                );
+                if (axios.isCancel(error)) return;
+                setEvents([]);
+                setLoadError(true);
             } finally {
-                if (isCurrentRequest) {
-                    setIsLoading(false);
-                }
+                setIsLoading(false);
             }
         };
 
-        loadEvents();
+        void loadEvents();
 
         return () => {
-            isCurrentRequest = false;
-
+            controller.abort();
             if (rollingTimeoutRef.current) {
                 clearTimeout(rollingTimeoutRef.current);
                 rollingTimeoutRef.current = null;
@@ -89,9 +66,7 @@ export const EventRoulette = () => {
         }
 
         const availableEvents = events.filter(
-            (event) =>
-                event.cityId === selectedCity?.id &&
-                event.price <= budget,
+            (event) => event.cityId === selectedCity?.id && event.price <= budget,
         );
 
         setIsRolling(true);
@@ -101,17 +76,11 @@ export const EventRoulette = () => {
             if (availableEvents.length === 0) {
                 setIsRolling(false);
                 rollingTimeoutRef.current = null;
-
                 return;
             }
 
-            const randomIndex = Math.floor(
-                Math.random() * availableEvents.length,
-            );
-
-            setSelectedEvent(
-                availableEvents[randomIndex],
-            );
+            const randomIndex = Math.floor(Math.random() * availableEvents.length);
+            setSelectedEvent(availableEvents[randomIndex]);
 
             setIsRolling(false);
             rollingTimeoutRef.current = null;
@@ -122,31 +91,21 @@ export const EventRoulette = () => {
         <section className="event-roulette">
             <div className="event-roulette__container">
                 <div className="event-roulette__info">
-                    <span className="event-roulette__eyebrow">
-                        DON'T KNOW WHAT TO DO?
-                    </span>
-
+                    <span className="event-roulette__eyebrow">DON'T KNOW WHAT TO DO?</span>
                     <h2 className="event-roulette__title">
                         Let us choose
                         <br />
                         your next event.
                     </h2>
-
                     <p className="event-roulette__description">
-                        Set your budget and let StepOut pick
-                        something interesting for tonight or
-                        tomorrow.
+                        Set your budget and let StepOut pick something interesting for tonight or tomorrow.
                     </p>
 
                     <div className="event-roulette__budget">
                         <div className="event-roulette__budget-header">
                             <span>YOUR BUDGET</span>
-
-                            <strong>
-                                ₴{budget.toLocaleString()}
-                            </strong>
+                            <strong>в‚ґ{budget.toLocaleString()}</strong>
                         </div>
-
                         <input
                             className="event-roulette__range"
                             type="range"
@@ -154,14 +113,11 @@ export const EventRoulette = () => {
                             max="10000"
                             step="100"
                             value={budget}
-                            onChange={(event) =>
-                                setBudget(Number(event.target.value))
-                            }
+                            onChange={(event) => setBudget(Number(event.target.value))}
                         />
-
                         <div className="event-roulette__range-labels">
-                            <span>₴0</span>
-                            <span>₴10,000</span>
+                            <span>0 UAH</span>
+                            <span>10,000 UAH</span>
                         </div>
                     </div>
 
@@ -169,16 +125,9 @@ export const EventRoulette = () => {
                         className="event-roulette__button"
                         type="button"
                         onClick={handleRoulette}
-                        disabled={
-                            isLoading ||
-                            isRolling ||
-                            loadError ||
-                            !selectedCity
-                        }
+                        disabled={isLoading || isRolling || loadError || !selectedCity}
                     >
-                        {isRolling
-                            ? 'CHOOSING...'
-                            : 'DECIDE FOR ME'}
+                        {isRolling ? 'CHOOSING...' : 'DECIDE FOR ME'}
                     </button>
 
                     {loadError && !isLoading && (
@@ -193,7 +142,8 @@ export const EventRoulette = () => {
                         </p>
                     )}
 
-                    {!loadError && !isLoading &&
+                    {!loadError &&
+                        !isLoading &&
                         !isRolling &&
                         !selectedEvent &&
                         events.length > 0 &&
@@ -204,9 +154,7 @@ export const EventRoulette = () => {
                         )}
 
                     {isLoading && (
-                        <p className="event-roulette__message">
-                            Loading events...
-                        </p>
+                        <p className="event-roulette__message">Loading events...</p>
                     )}
                 </div>
 
@@ -216,7 +164,6 @@ export const EventRoulette = () => {
                             <div className="event-roulette__question-icon">
                                 <CircleHelp size={54} />
                             </div>
-
                             <span>
                                 Your next event
                                 <br />
@@ -230,7 +177,6 @@ export const EventRoulette = () => {
                             <div className="event-roulette__rolling-icon">
                                 <CircleHelp size={52} />
                             </div>
-
                             <span>Choosing an event...</span>
                         </div>
                     )}

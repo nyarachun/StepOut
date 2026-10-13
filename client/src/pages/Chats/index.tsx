@@ -1,17 +1,10 @@
-import {
-    MessageCircle,
-    Send,
-} from 'lucide-react';
-import {
-    useEffect,
-    useMemo,
-    useState,
-    type FormEvent,
-} from 'react';
-import {
-    useSearchParams,
-} from 'react-router-dom';
+import axios from 'axios';
+import { MessageCircle, Send } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { io, Socket } from 'socket.io-client';
 
+import { API_URL } from '../../api/api';
 import {
     getChatMessages,
     getMyChats,
@@ -26,217 +19,179 @@ import { useChat } from '../../context/useChat';
 import './Chats.scss';
 
 const Chats = () => {
-    const { isAuthenticated } =
-        useAuth();
-    const { refreshUnreadCount } =
-        useChat();
+    const { isAuthenticated, user } = useAuth();
+    const { refreshUnreadCount } = useChat();
+    const [searchParams] = useSearchParams();
 
-    const [searchParams] =
-        useSearchParams();
+    const requestedChatId = Number(searchParams.get('chat'));
 
-    const requestedChatId =
-        Number(
-            searchParams.get('chat'),
-        );
+    const [chats, setChats] = useState<Chat[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
+    const [messageText, setMessageText] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [error, setError] = useState('');
+    const [socket, setSocket] = useState<Socket | null>(null);
 
-    const [chats, setChats] =
-        useState<Chat[]>([]);
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) {
+            return;
+        }
 
-    const [messages, setMessages] =
-        useState<Message[]>([]);
+        const newSocket = io(API_URL, {
+            transports: ['websocket'],
+            query: { userId: String(user.id) },
+        });
 
-    const [
-        selectedChatId,
-        setSelectedChatId,
-    ] = useState<number | null>(null);
+        newSocket.on('connect', () => {
+            setSocket(newSocket);
+        });
 
-    const [messageText, setMessageText] =
-        useState('');
-
-    const [isLoading, setIsLoading] =
-        useState(true);
-
-    const [
-        isMessagesLoading,
-        setIsMessagesLoading,
-    ] = useState(false);
-
-    const [isSending, setIsSending] =
-        useState(false);
-
-    const [error, setError] =
-        useState('');
+        return () => {
+            newSocket.disconnect();
+            setSocket(null);
+        };
+    }, [isAuthenticated, user?.id]);
 
     useEffect(() => {
         if (!isAuthenticated) {
             return;
         }
 
+        const controller = new AbortController();
+
         const loadChats = async () => {
             setIsLoading(true);
             setError('');
 
             try {
-                const data =
-                    await getMyChats();
-
+                const data = await getMyChats({ signal: controller.signal });
                 setChats(data);
 
-                if (
-                    requestedChatId &&
-                    data.some(
-                        (chat) =>
-                            chat.id ===
-                            requestedChatId,
-                    )
-                ) {
-                    setSelectedChatId(
-                        requestedChatId,
-                    );
-
+                if (requestedChatId && data.some((chat) => chat.id === requestedChatId)) {
+                    setSelectedChatId(requestedChatId);
                     return;
                 }
 
-                if (
-                    data.length > 0
-                ) {
-                    setSelectedChatId(
-                        data[0].id,
-                    );
+                if (data.length > 0) {
+                    setSelectedChatId(data[0].id);
                 } else {
                     setSelectedChatId(null);
                 }
-            } catch {
-                setError(
-                    'Could not load chats.',
-                );
+            } catch (err) {
+                if (axios.isCancel(err)) return;
+                setError('Could not load chats.');
             } finally {
                 setIsLoading(false);
             }
         };
 
         void loadChats();
-    }, [
-        isAuthenticated,
-        requestedChatId,
-    ]);
+
+        return () => {
+            controller.abort();
+        };
+    }, [isAuthenticated, requestedChatId]);
 
     useEffect(() => {
-        if (
-            selectedChatId === null
-        ) {
+        if (selectedChatId === null) {
             return;
         }
 
-        const loadMessages =
-            async () => {
-                setIsMessagesLoading(
-                    true,
-                );
-                setError('');
+        const controller = new AbortController();
 
-                try {
-                    const data =
-                        await getChatMessages(
-                            selectedChatId,
-                        );
+        const loadMessages = async () => {
+            setIsMessagesLoading(true);
+            setError('');
 
-                    setMessages(data);
-                } catch {
-                    setError(
-                        'Could not load messages.',
-                    );
-                } finally {
-                    setIsMessagesLoading(
-                        false,
-                    );
-                }
-            };
+            try {
+                const data = await getChatMessages(selectedChatId, { signal: controller.signal });
+                setMessages(data);
+            } catch (err) {
+                if (axios.isCancel(err)) return;
+                setError('Could not load messages.');
+            } finally {
+                setIsMessagesLoading(false);
+            }
+        };
 
         void loadMessages();
-    }, [selectedChatId]);
+
+        if (socket) {
+            socket.emit('joinChat', { chatId: selectedChatId });
+
+            socket.on('newMessage', (newMessage: Message) => {
+                setMessages((currentMessages) => [...currentMessages, newMessage]);
+                void markChatAsRead(selectedChatId);
+                void refreshUnreadCount();
+            });
+        }
+
+        return () => {
+            controller.abort();
+            if (socket) {
+                socket.emit('leaveChat', { chatId: selectedChatId });
+                socket.off('newMessage');
+            }
+        };
+    }, [selectedChatId, socket, refreshUnreadCount]);
 
     useEffect(() => {
-        if (
-            !selectedChatId ||
-            !isAuthenticated
-        ) {
+        if (!selectedChatId || !isAuthenticated) {
             return;
         }
+
+        const controller = new AbortController();
 
         const handleRead = async () => {
             try {
-                await markChatAsRead(
-                    selectedChatId,
-                );
+                await markChatAsRead(selectedChatId, { signal: controller.signal });
                 await refreshUnreadCount();
-            } catch {
-                // ignore read-mark errors; they are not fatal
+            } catch (err) {
+                if (axios.isCancel(err)) return;
             }
         };
 
         void handleRead();
-    }, [
-        isAuthenticated,
-        refreshUnreadCount,
-        selectedChatId,
-    ]);
+
+        return () => {
+            controller.abort();
+        };
+    }, [isAuthenticated, refreshUnreadCount, selectedChatId]);
 
     const selectedChat = useMemo(
-        () =>
-            chats.find(
-                (chat) =>
-                    chat.id ===
-                    selectedChatId,
-            ) || null,
+        () => chats.find((chat) => chat.id === selectedChatId) || null,
         [chats, selectedChatId],
     );
 
-    const getChatTitle = (
-        chat: Chat,
-    ) => {
+    const getChatTitle = (chat: Chat) => {
         if (chat.type === 'admin') {
             return 'StepOut Admin';
         }
 
-        if (
-            chat.type === 'event' &&
-            chat.event
-        ) {
+        if (chat.type === 'event' && chat.event) {
             return chat.event.title;
         }
 
-        const participant =
-            chat.participants[0];
-
-        return (
-            participant?.user.name ||
-            'Chat'
-        );
+        const participant = chat.participants[0];
+        return participant?.user.name || 'Chat';
     };
 
-    const getChatType = (
-        chat: Chat,
-    ) => {
+    const getChatType = (chat: Chat) => {
         if (chat.type === 'admin') {
             return 'Admin';
         }
-
         return 'Event';
     };
 
-    const handleSend = async (
-        event: FormEvent<HTMLFormElement>,
-    ) => {
+    const handleSend = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        const text =
-            messageText.trim();
+        const text = messageText.trim();
 
-        if (
-            !text ||
-            selectedChatId === null
-        ) {
+        if (!text || selectedChatId === null) {
             return;
         }
 
@@ -244,26 +199,11 @@ const Chats = () => {
         setError('');
 
         try {
-            const message =
-                await sendMessage(
-                    selectedChatId,
-                    text,
-                );
-
-            setMessages(
-                (
-                    currentMessages,
-                ) => [
-                        ...currentMessages,
-                        message,
-                    ],
-            );
-
+            const message = await sendMessage(selectedChatId, text);
+            setMessages((currentMessages) => [...currentMessages, message]);
             setMessageText('');
         } catch {
-            setError(
-                'Could not send message.',
-            );
+            setError('Could not send message.');
         } finally {
             setIsSending(false);
         }
@@ -272,9 +212,7 @@ const Chats = () => {
     if (isLoading) {
         return (
             <main className="chats-page">
-                <div className="chats-page__loading">
-                    Loading chats...
-                </div>
+                <div className="chats-page__loading">Loading chats...</div>
             </main>
         );
     }
@@ -283,224 +221,110 @@ const Chats = () => {
         <main className="chats-page">
             <div className="chats-page__container">
                 <header className="chats-page__header">
-                    <span>
-                        MESSAGES
-                    </span>
-
+                    <span>MESSAGES</span>
                     <h1>Chats</h1>
-
-                    <p>
-                        Talk to event organizers and the StepOut team.
-                    </p>
+                    <p>Talk to event organizers and the StepOut team.</p>
                 </header>
 
-                {error && (
-                    <p className="chats-page__error">
-                        {error}
-                    </p>
-                )}
+                {error && <p className="chats-page__error">{error}</p>}
 
                 <div className="chats-page__layout">
                     <aside className="chats-page__sidebar">
-                        {chats.length ===
-                            0 ? (
+                        {chats.length === 0 ? (
                             <div className="chats-page__empty">
-                                <MessageCircle
-                                    size={
-                                        28
-                                    }
-                                />
-
-                                <p>
-                                    No chats
-                                    yet
-                                </p>
+                                <MessageCircle size={28} />
+                                <p>No chats yet</p>
                             </div>
                         ) : (
-                            chats.map(
-                                (
-                                    chat,
-                                ) => (
-                                    <button
-                                        key={
-                                            chat.id
-                                        }
-                                        type="button"
-                                        className={`chats-page__chat-item ${selectedChatId ===
-                                            chat.id
-                                            ? 'is-active'
-                                            : ''
-                                            }`}
-                                        onClick={() =>
-                                            setSelectedChatId(
-                                                chat.id,
-                                            )
-                                        }
-                                    >
-                                        <div className="chats-page__chat-icon">
-                                            <MessageCircle
-                                                size={
-                                                    18
-                                                }
-                                            />
-                                        </div>
-
-                                        <div className="chats-page__chat-info">
-                                            <strong>
-                                                {getChatTitle(
-                                                    chat,
-                                                )}
-                                            </strong>
-
-                                            <span>
-                                                {getChatType(
-                                                    chat,
-                                                )}
-                                            </span>
-                                        </div>
-                                    </button>
-                                ),
-                            )
+                            chats.map((chat) => (
+                                <button
+                                    key={chat.id}
+                                    type="button"
+                                    className={`chats-page__chat-item ${
+                                        selectedChatId === chat.id ? 'is-active' : ''
+                                    }`}
+                                    onClick={() => setSelectedChatId(chat.id)}
+                                >
+                                    <div className="chats-page__chat-icon">
+                                        <MessageCircle size={18} />
+                                    </div>
+                                    <div className="chats-page__chat-info">
+                                        <strong>{getChatTitle(chat)}</strong>
+                                        <span>{getChatType(chat)}</span>
+                                    </div>
+                                </button>
+                            ))
                         )}
                     </aside>
 
                     <section className="chats-page__conversation">
                         {!selectedChat ? (
                             <div className="chats-page__no-chat">
-                                <MessageCircle
-                                    size={
-                                        38
-                                    }
-                                />
-
-                                <h2>
-                                    Select a
-                                    chat
-                                </h2>
-
-                                <p>
-                                    Choose a
-                                    conversation
-                                    to start
-                                    messaging.
-                                </p>
+                                <MessageCircle size={38} />
+                                <h2>Select a chat</h2>
+                                <p>Choose a conversation to start messaging.</p>
                             </div>
                         ) : (
                             <>
                                 <header className="chats-page__conversation-header">
                                     <div>
-                                        <strong>
-                                            {getChatTitle(
-                                                selectedChat,
-                                            )}
-                                        </strong>
-
-                                        <span>
-                                            {getChatType(
-                                                selectedChat,
-                                            )}
-                                        </span>
+                                        <strong>{getChatTitle(selectedChat)}</strong>
+                                        <span>{getChatType(selectedChat)}</span>
                                     </div>
                                 </header>
 
                                 <div className="chats-page__messages">
                                     {isMessagesLoading ? (
                                         <p className="chats-page__messages-loading">
-                                            Loading
-                                            messages...
+                                            Loading messages...
                                         </p>
-                                    ) : messages.length ===
-                                        0 ? (
+                                    ) : messages.length === 0 ? (
                                         <p className="chats-page__messages-loading">
-                                            No
-                                            messages
-                                            yet.
+                                            No messages yet.
                                         </p>
                                     ) : (
-                                        messages.map(
-                                            (
-                                                message,
-                                            ) => (
-                                                <div
-                                                    key={
-                                                        message.id
-                                                    }
-                                                    className={`chats-page__message ${message.isSystem
-                                                        ? 'is-system'
-                                                        : ''
-                                                        }`}
-                                                >
-                                                    <div className="chats-page__message-author">
-                                                        {message.sender?.name ||
-                                                            'StepOut'}
-                                                    </div>
-
-                                                    <p>
-                                                        {
-                                                            message.text
-                                                        }
-                                                    </p>
-
-                                                    <time>
-                                                        {new Date(
-                                                            message.createdAt,
-                                                        ).toLocaleTimeString(
-                                                            'en-US',
-                                                            {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit',
-                                                            },
-                                                        )}
-                                                    </time>
+                                        messages.map((message) => (
+                                            <div
+                                                key={message.id}
+                                                className={`chats-page__message ${
+                                                    message.isSystem ? 'is-system' : ''
+                                                }`}
+                                            >
+                                                <div className="chats-page__message-author">
+                                                    {message.sender?.name || 'StepOut'}
                                                 </div>
-                                            ),
-                                        )
+                                                <p>{message.text}</p>
+                                                <time>
+                                                    {new Date(message.createdAt).toLocaleTimeString(
+                                                        'en-US',
+                                                        {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        },
+                                                    )}
+                                                </time>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
 
-                                {selectedChat.type !==
-                                    'admin' && (
-                                        <form
-                                            className="chats-page__composer"
-                                            onSubmit={
-                                                handleSend
-                                            }
+                                {selectedChat.type !== 'admin' && (
+                                    <form className="chats-page__composer" onSubmit={handleSend}>
+                                        <input
+                                            type="text"
+                                            value={messageText}
+                                            onChange={(event) => setMessageText(event.target.value)}
+                                            placeholder="Write a message..."
+                                            maxLength={2000}
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={isSending || !messageText.trim()}
                                         >
-                                            <input
-                                                type="text"
-                                                value={
-                                                    messageText
-                                                }
-                                                onChange={(
-                                                    event,
-                                                ) =>
-                                                    setMessageText(
-                                                        event
-                                                            .target
-                                                            .value,
-                                                    )
-                                                }
-                                                placeholder="Write a message..."
-                                                maxLength={
-                                                    2000
-                                                }
-                                            />
-
-                                            <button
-                                                type="submit"
-                                                disabled={
-                                                    isSending ||
-                                                    !messageText.trim()
-                                                }
-                                            >
-                                                <Send
-                                                    size={
-                                                        17
-                                                    }
-                                                />
-                                            </button>
-                                        </form>
-                                    )}
+                                            <Send size={17} />
+                                        </button>
+                                    </form>
+                                )}
                             </>
                         )}
                     </section>

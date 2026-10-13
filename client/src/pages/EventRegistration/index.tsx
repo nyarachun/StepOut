@@ -1,25 +1,10 @@
 import axios from 'axios';
-import {
-    ArrowLeft,
-    CalendarDays,
-    Check,
-    MapPin,
-    Users,
-} from 'lucide-react';
-import {
-    useEffect,
-    useState,
-} from 'react';
-import {
-    Link,
-    useNavigate,
-    useParams,
-} from 'react-router-dom';
+import { CalendarDays, Check, MapPin, Users, ArrowLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../../api/api';
-import {
-    registerForEvent,
-} from '../../api/registrations';
+import { registerForEvent } from '../../api/registrations';
 
 import './EventRegistration.scss';
 
@@ -40,147 +25,87 @@ const EventRegistration = () => {
     const { id } = useParams();
     const navigate = useNavigate();
 
-    const [
-        event,
-        setEvent,
-    ] = useState<EventData | null>(
-        null,
-    );
+    const [event, setEvent] = useState<EventData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRegistering, setIsRegistering] = useState(false);
 
-    const [
-        isLoading,
-        setIsLoading,
-    ] = useState(true);
+    const [cardNumber, setCardNumber] = useState('');
+    const [cardholderName, setCardholderName] = useState('');
+    const [expiry, setExpiry] = useState('');
+    const [cvv, setCvv] = useState('');
 
-    const [
-        isRegistering,
-        setIsRegistering,
-    ] = useState(false);
-
-    const [cardNumber, setCardNumber] =
-        useState('');
-
-    const [cardholderName, setCardholderName] =
-        useState('');
-
-    const [expiry, setExpiry] =
-        useState('');
-
-    const [cvv, setCvv] =
-        useState('');
-
-    const [error, setError] =
-        useState('');
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        const loadEvent =
-            async () => {
-                if (!id) {
-                    return;
-                }
+        const controller = new AbortController();
 
-                try {
-                    const response =
-                        await api.get<EventData>(
-                            `/events/${id}`,
-                        );
-
-                    setEvent(
-                        response.data,
-                    );
-                } catch {
-                    setError(
-                        'Could not load event.',
-                    );
-                } finally {
-                    setIsLoading(
-                        false,
-                    );
-                }
-            };
-
-        loadEvent();
-    }, [id]);
-
-    const handleRegister =
-        async () => {
-            if (!event) {
-                return;
-            }
-
-            setError('');
-
-            if (Number(event.price) > 0) {
-                const normalizedCard = cardNumber.replace(/\s/g, '');
-
-                if (
-                    !/^\d{16}$/.test(normalizedCard) ||
-                    !/^\d{2}\/\d{2}$/.test(expiry) ||
-                    !/^\d{3,4}$/.test(cvv) ||
-                    cardholderName.trim().length < 2
-                ) {
-                    setError(
-                        'Enter valid mock payment details to continue.',
-                    );
-
-                    return;
-                }
-            }
-
-            setIsRegistering(true);
+        const loadEvent = async () => {
+            if (!id) return;
 
             try {
-                await registerForEvent(
-                    event.id,
-                );
-
-                navigate(
-                    '/my-events',
-                    {
-                        replace: true,
-                    },
-                );
-            } catch (
-            requestError
-            ) {
-                if (
-                    axios.isAxiosError(
-                        requestError,
-                    )
-                ) {
-                    const message =
-                        requestError
-                            .response
-                            ?.data?.message;
-
-                    setError(
-                        Array.isArray(
-                            message,
-                        )
-                            ? message.join(
-                                ', ',
-                            )
-                            : message ||
-                            'Could not register for this event.',
-                    );
-                } else {
-                    setError(
-                        'Could not register for this event.',
-                    );
-                }
+                const response = await api.get<EventData>(`/events/${id}`, {
+                    signal: controller.signal,
+                });
+                setEvent(response.data);
+            } catch (err) {
+                if (axios.isCancel(err)) return;
+                setError('Could not load event.');
             } finally {
-                setIsRegistering(
-                    false,
-                );
+                setIsLoading(false);
             }
         };
+
+        void loadEvent();
+
+        return () => {
+            controller.abort();
+        };
+    }, [id]);
+
+    const handleRegister = async () => {
+        if (!event) return;
+
+        setError('');
+
+        if (Number(event.price) > 0) {
+            const normalizedCard = cardNumber.replace(/\s/g, '');
+
+            if (
+                !/^\d{16}$/.test(normalizedCard) ||
+                !/^\d{2}\/\d{2}$/.test(expiry) ||
+                !/^\d{3,4}$/.test(cvv) ||
+                cardholderName.trim().length < 2
+            ) {
+                setError('Enter valid mock payment details to continue.');
+                return;
+            }
+        }
+
+        setIsRegistering(true);
+
+        try {
+            await registerForEvent(event.id);
+            navigate('/my-events', { replace: true });
+        } catch (requestError) {
+            if (axios.isAxiosError(requestError)) {
+                const message = requestError.response?.data?.message;
+                setError(
+                    Array.isArray(message)
+                        ? message.join(', ')
+                        : message || 'Could not register for this event.',
+                );
+            } else {
+                setError('Could not register for this event.');
+            }
+        } finally {
+            setIsRegistering(false);
+        }
+    };
 
     if (isLoading) {
         return (
             <main className="event-registration">
-                <div className="event-registration__loading">
-                    Loading event...
-                </div>
+                <div className="event-registration__loading">Loading event...</div>
             </main>
         );
     }
@@ -190,17 +115,10 @@ const EventRegistration = () => {
             <main className="event-registration">
                 <div className="event-registration__container">
                     <p className="event-registration__error">
-                        {error ||
-                            'Event not found.'}
+                        {error || 'Event not found.'}
                     </p>
-
-                    <Link
-                        to="/events"
-                        className="event-registration__back"
-                    >
-                        <ArrowLeft
-                            size={17}
-                        />
+                    <Link to="/events" className="event-registration__back">
+                        <ArrowLeft size={17} />
                         Back to events
                     </Link>
                 </div>
@@ -208,121 +126,61 @@ const EventRegistration = () => {
         );
     }
 
-    const eventDate =
-        new Date(event.date);
-
+    const eventDate = new Date(event.date);
     const availableSpots =
-        event.availableSpots ??
-        event.capacity -
-        (event.registeredCount ??
-            0);
-
-    const isSoldOut =
-        availableSpots <= 0;
+        event.availableSpots ?? event.capacity - (event.registeredCount ?? 0);
+    const isSoldOut = availableSpots <= 0;
 
     return (
         <main className="event-registration">
             <div className="event-registration__container">
-                <Link
-                    to={`/events/${event.id}`}
-                    className="event-registration__back"
-                >
-                    <ArrowLeft
-                        size={17}
-                    />
+                <Link to={`/events/${event.id}`} className="event-registration__back">
+                    <ArrowLeft size={17} />
                     Back to event
                 </Link>
 
                 <div className="event-registration__card">
                     <div className="event-registration__image">
                         {event.imageUrl ? (
-                            <img
-                                src={
-                                    event.imageUrl
-                                }
-                                alt={
-                                    event.title
-                                }
-                            />
+                            <img src={event.imageUrl} alt={event.title} />
                         ) : (
-                            <div>
-                                No image
-                            </div>
+                            <div>No image</div>
                         )}
                     </div>
 
                     <div className="event-registration__content">
-                        <span className="event-registration__eyebrow">
-                            EVENT REGISTRATION
-                        </span>
-
-                        <h1>
-                            {event.title}
-                        </h1>
-
-                        <p className="event-registration__description">
-                            {event.description}
-                        </p>
+                        <span className="event-registration__eyebrow">EVENT REGISTRATION</span>
+                        <h1>{event.title}</h1>
+                        <p className="event-registration__description">{event.description}</p>
 
                         <div className="event-registration__info">
                             <div>
-                                <CalendarDays
-                                    size={18}
-                                />
-
+                                <CalendarDays size={18} />
                                 <span>
-                                    {eventDate.toLocaleDateString(
-                                        'en-US',
-                                        {
-                                            day: 'numeric',
-                                            month: 'long',
-                                            year: 'numeric',
-                                        },
-                                    )}
-
-                                    {' · '}
-
-                                    {eventDate.toLocaleTimeString(
-                                        'en-US',
-                                        {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        },
-                                    )}
+                                    {eventDate.toLocaleDateString('en-US', {
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric',
+                                    })}
+                                    {' В· '}
+                                    {eventDate.toLocaleTimeString('en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                    })}
                                 </span>
                             </div>
-
                             <div>
-                                <MapPin
-                                    size={18}
-                                />
-
-                                <span>
-                                    {
-                                        event.address
-                                    }
-                                </span>
+                                <MapPin size={18} />
+                                <span>{event.address}</span>
                             </div>
-
                             <div>
-                                <Users
-                                    size={18}
-                                />
-
-                                <span>
-                                    {availableSpots}{' '}
-                                    spots
-                                    available
-                                </span>
+                                <Users size={18} />
+                                <span>{availableSpots} spots available</span>
                             </div>
                         </div>
 
                         <div className="event-registration__price">
-                            {Number(
-                                event.price,
-                            ) === 0
-                                ? 'Free'
-                                : `${event.price} UAH`}
+                            {Number(event.price) === 0 ? 'Free' : `${event.price} UAH`}
                         </div>
 
                         {Number(event.price) > 0 && (
@@ -336,9 +194,7 @@ const EventRegistration = () => {
                                     Cardholder name
                                     <input
                                         value={cardholderName}
-                                        onChange={(currentEvent) =>
-                                            setCardholderName(currentEvent.target.value)
-                                        }
+                                        onChange={(e) => setCardholderName(e.target.value)}
                                         placeholder="Alex Morgan"
                                     />
                                 </label>
@@ -347,9 +203,9 @@ const EventRegistration = () => {
                                     Card number
                                     <input
                                         value={cardNumber}
-                                        onChange={(currentEvent) =>
+                                        onChange={(e) =>
                                             setCardNumber(
-                                                currentEvent.target.value
+                                                e.target.value
                                                     .replace(/\D/g, '')
                                                     .slice(0, 16)
                                                     .replace(/(.{4})/g, '$1 ')
@@ -365,9 +221,9 @@ const EventRegistration = () => {
                                         Expiry
                                         <input
                                             value={expiry}
-                                            onChange={(currentEvent) =>
+                                            onChange={(e) =>
                                                 setExpiry(
-                                                    currentEvent.target.value
+                                                    e.target.value
                                                         .replace(/\D/g, '')
                                                         .slice(0, 4)
                                                         .replace(/^(\d{2})(\d)/, '$1/$2'),
@@ -381,11 +237,9 @@ const EventRegistration = () => {
                                         CVV
                                         <input
                                             value={cvv}
-                                            onChange={(currentEvent) =>
+                                            onChange={(e) =>
                                                 setCvv(
-                                                    currentEvent.target.value
-                                                        .replace(/\D/g, '')
-                                                        .slice(0, 4),
+                                                    e.target.value.replace(/\D/g, '').slice(0, 4),
                                                 )
                                             }
                                             placeholder="123"
@@ -395,22 +249,13 @@ const EventRegistration = () => {
                             </div>
                         )}
 
-                        {error && (
-                            <p className="event-registration__error">
-                                {error}
-                            </p>
-                        )}
+                        {error && <p className="event-registration__error">{error}</p>}
 
                         <button
                             className="event-registration__submit"
                             type="button"
-                            onClick={
-                                handleRegister
-                            }
-                            disabled={
-                                isRegistering ||
-                                isSoldOut
-                            }
+                            onClick={handleRegister}
+                            disabled={isRegistering || isSoldOut}
                         >
                             {isRegistering ? (
                                 'Registering...'

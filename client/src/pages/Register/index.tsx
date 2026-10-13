@@ -1,17 +1,7 @@
 import axios from 'axios';
-import {
-    ArrowRight,
-    Eye,
-    EyeOff,
-} from 'lucide-react';
-import {
-    useState,
-    type FormEvent,
-} from 'react';
-import {
-    Link,
-    useNavigate,
-} from 'react-router-dom';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../../api/api';
 
@@ -23,9 +13,7 @@ const EMAIL_MAX_LENGTH = 254;
 const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 64;
 
-const emailRegex =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const nameRegex = /^[A-Za-zА-Яа-яІіЇїЄєҐґ' -]+$/;
 
 const Register = () => {
@@ -33,121 +21,58 @@ const Register = () => {
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
-    const [password, setPassword] =
-        useState('');
-    const [confirmPassword, setConfirmPassword] =
-        useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [role, setRole] = useState<'user' | 'organizer'>('user');
 
-    const [role, setRole] =
-        useState<'user' | 'organizer'>('user');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    const [showPassword, setShowPassword] =
-        useState(false);
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const [
-        showConfirmPassword,
-        setShowConfirmPassword,
-    ] = useState(false);
-
-    const [error, setError] =
-        useState('');
-
-    const [isLoading, setIsLoading] =
-        useState(false);
-
-    const handleSubmit = async (
-        event: FormEvent<HTMLFormElement>,
-    ) => {
-        event.preventDefault();
-
-        setError('');
-
+    const validateForm = () => {
         const trimmedName = name.trim();
-        const trimmedEmail =
-            email.trim();
+        const trimmedEmail = email.trim();
 
-        if (
-            trimmedName.length <
-            NAME_MIN_LENGTH
-        ) {
-            setError(
-                `Name must contain at least ${NAME_MIN_LENGTH} characters.`,
-            );
-
-            return;
-        }
-
-        if (
-            trimmedName.length >
-            NAME_MAX_LENGTH
-        ) {
-            setError(
-                `Name must not exceed ${NAME_MAX_LENGTH} characters.`,
-            );
-
-            return;
+        if (trimmedName.length < NAME_MIN_LENGTH || trimmedName.length > NAME_MAX_LENGTH) {
+            setError(`Name must be between ${NAME_MIN_LENGTH} and ${NAME_MAX_LENGTH} characters.`);
+            return false;
         }
 
         if (!nameRegex.test(trimmedName)) {
-            setError(
-                'Name can contain only letters, spaces, hyphens and apostrophes.',
-            );
-
-            return;
+            setError('Name can contain only letters, spaces, hyphens and apostrophes.');
+            return false;
         }
 
-        if (!trimmedEmail) {
-            setError('Email is required.');
-
-            return;
-        }
-
-        if (
-            trimmedEmail.length >
-            EMAIL_MAX_LENGTH
-        ) {
-            setError(
-                `Email must not exceed ${EMAIL_MAX_LENGTH} characters.`,
-            );
-
-            return;
+        if (!trimmedEmail || trimmedEmail.length > EMAIL_MAX_LENGTH) {
+            setError(`Email must be valid and not exceed ${EMAIL_MAX_LENGTH} characters.`);
+            return false;
         }
 
         if (!emailRegex.test(trimmedEmail)) {
-            setError(
-                'Please enter a valid email address.',
-            );
-
-            return;
+            setError('Please enter a valid email address.');
+            return false;
         }
 
-        if (
-            password.length <
-            PASSWORD_MIN_LENGTH
-        ) {
-            setError(
-                `Password must contain at least ${PASSWORD_MIN_LENGTH} characters.`,
-            );
-
-            return;
-        }
-
-        if (
-            password.length >
-            PASSWORD_MAX_LENGTH
-        ) {
-            setError(
-                `Password must not exceed ${PASSWORD_MAX_LENGTH} characters.`,
-            );
-
-            return;
+        if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+            setError(`Password must be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`);
+            return false;
         }
 
         if (password !== confirmPassword) {
-            setError(
-                'Passwords do not match.',
-            );
+            setError('Passwords do not match.');
+            return false;
+        }
 
+        return true;
+    };
+
+    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setError('');
+
+        if (!validateForm()) {
             return;
         }
 
@@ -155,41 +80,27 @@ const Register = () => {
 
         try {
             await api.post('/auth/register', {
-                name: trimmedName,
-                email: trimmedEmail,
+                name: name.trim(),
+                email: email.trim(),
                 password,
                 role,
             });
 
             navigate('/login', {
                 state: {
-                    email: trimmedEmail,
+                    email: email.trim(),
                 },
             });
         } catch (requestError) {
-            if (
-                axios.isAxiosError(
-                    requestError,
-                )
-            ) {
-                const errorMessage =
-                    requestError.response
-                        ?.data?.message;
-
+            if (axios.isAxiosError(requestError)) {
+                const errorMessage = requestError.response?.data?.message;
                 setError(
-                    Array.isArray(
-                        errorMessage,
-                    )
-                        ? errorMessage.join(
-                              ', ',
-                          )
-                        : errorMessage ||
-                              'Registration failed.',
+                    Array.isArray(errorMessage)
+                        ? errorMessage.join(', ')
+                        : errorMessage || 'Registration failed.',
                 );
             } else {
-                setError(
-                    'Registration failed.',
-                );
+                setError('Registration failed.');
             }
         } finally {
             setIsLoading(false);
@@ -200,276 +111,107 @@ const Register = () => {
         <main className="register-page">
             <section className="register-page__content">
                 <div className="register-page__container">
-                    <Link
-                        to="/login"
-                        className="register-page__back"
-                    >
-                        ← Back to sign in
+                    <Link to="/login" className="register-page__back">
+                        в†ђ Back to sign in
                     </Link>
 
-                    <span className="register-page__eyebrow">
-                        STEP INTO SOMETHING NEW
-                    </span>
+                    <span className="register-page__eyebrow">STEP INTO SOMETHING NEW</span>
 
-                    <h1 className="register-page__title">
-                        Create your account
-                    </h1>
+                    <h1 className="register-page__title">Create your account</h1>
 
                     <p className="register-page__description">
-                        Join StepOut and discover
-                        events, people and
-                        experiences in your city.
+                        Join StepOut and discover events, people and experiences in your city.
                     </p>
 
-                    <form
-                        className="register-page__form"
-                        onSubmit={
-                            handleSubmit
-                        }
-                    >
+                    <form className="register-page__form" onSubmit={handleSubmit}>
                         <div className="register-page__field">
-                            <label htmlFor="name">
-                                Name
-                            </label>
-
+                            <label htmlFor="name">Name</label>
                             <input
                                 id="name"
                                 type="text"
                                 value={name}
-                                onChange={(
-                                    event,
-                                ) =>
-                                    setName(
-                                        event
-                                            .target
-                                            .value,
-                                    )
-                                }
+                                onChange={(event) => setName(event.target.value)}
                                 placeholder="Your name"
-                                minLength={
-                                    NAME_MIN_LENGTH
-                                }
-                                maxLength={
-                                    NAME_MAX_LENGTH
-                                }
                                 required
                             />
                         </div>
 
                         <div className="register-page__field">
-                            <label htmlFor="email">
-                                Email
-                            </label>
-
+                            <label htmlFor="email">Email</label>
                             <input
                                 id="email"
                                 type="email"
                                 value={email}
-                                onChange={(
-                                    event,
-                                ) =>
-                                    setEmail(
-                                        event
-                                            .target
-                                            .value,
-                                    )
-                                }
+                                onChange={(event) => setEmail(event.target.value)}
                                 placeholder="you@example.com"
-                                maxLength={
-                                    EMAIL_MAX_LENGTH
-                                }
                                 required
                             />
                         </div>
 
                         <div className="register-page__field">
-                            <label htmlFor="role">
-                                Account type
-                            </label>
-
+                            <label htmlFor="role">Account type</label>
                             <select
                                 id="role"
                                 value={role}
-                                onChange={(
-                                    event,
-                                ) =>
-                                    setRole(
-                                        event
-                                            .target
-                                            .value as
-                                            | 'user'
-                                            | 'organizer',
-                                    )
-                                }
+                                onChange={(event) => setRole(event.target.value as 'user' | 'organizer')}
                             >
-                                <option value="user">
-                                    User
-                                </option>
-
-                                <option value="organizer">
-                                    Organizer
-                                </option>
+                                <option value="user">User</option>
+                                <option value="organizer">Organizer</option>
                             </select>
                         </div>
 
                         <div className="register-page__field">
-                            <label htmlFor="password">
-                                Password
-                            </label>
-
+                            <label htmlFor="password">Password</label>
                             <div className="register-page__password">
                                 <input
                                     id="password"
-                                    type={
-                                        showPassword
-                                            ? 'text'
-                                            : 'password'
-                                    }
-                                    value={
-                                        password
-                                    }
-                                    onChange={(
-                                        event,
-                                    ) =>
-                                        setPassword(
-                                            event
-                                                .target
-                                                .value,
-                                        )
-                                    }
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
                                     placeholder="At least 8 characters"
-                                    minLength={
-                                        PASSWORD_MIN_LENGTH
-                                    }
-                                    maxLength={
-                                        PASSWORD_MAX_LENGTH
-                                    }
                                     required
                                 />
-
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowPassword(
-                                            (
-                                                previous,
-                                            ) =>
-                                                !previous,
-                                        )
-                                    }
-                                    aria-label={
-                                        showPassword
-                                            ? 'Hide password'
-                                            : 'Show password'
-                                    }
+                                    onClick={() => setShowPassword((previous) => !previous)}
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
-                                    {showPassword ? (
-                                        <EyeOff
-                                            size={18}
-                                        />
-                                    ) : (
-                                        <Eye
-                                            size={18}
-                                        />
-                                    )}
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
                         </div>
 
                         <div className="register-page__field">
-                            <label htmlFor="confirm-password">
-                                Confirm password
-                            </label>
-
+                            <label htmlFor="confirm-password">Confirm password</label>
                             <div className="register-page__password">
                                 <input
                                     id="confirm-password"
-                                    type={
-                                        showConfirmPassword
-                                            ? 'text'
-                                            : 'password'
-                                    }
-                                    value={
-                                        confirmPassword
-                                    }
-                                    onChange={(
-                                        event,
-                                    ) =>
-                                        setConfirmPassword(
-                                            event
-                                                .target
-                                                .value,
-                                        )
-                                    }
+                                    type={showConfirmPassword ? 'text' : 'password'}
+                                    value={confirmPassword}
+                                    onChange={(event) => setConfirmPassword(event.target.value)}
                                     placeholder="Repeat your password"
-                                    minLength={
-                                        PASSWORD_MIN_LENGTH
-                                    }
-                                    maxLength={
-                                        PASSWORD_MAX_LENGTH
-                                    }
                                     required
                                 />
-
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowConfirmPassword(
-                                            (
-                                                previous,
-                                            ) =>
-                                                !previous,
-                                        )
-                                    }
-                                    aria-label={
-                                        showConfirmPassword
-                                            ? 'Hide password'
-                                            : 'Show password'
-                                    }
+                                    onClick={() => setShowConfirmPassword((previous) => !previous)}
+                                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                                 >
-                                    {showConfirmPassword ? (
-                                        <EyeOff
-                                            size={18}
-                                        />
-                                    ) : (
-                                        <Eye
-                                            size={18}
-                                        />
-                                    )}
+                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
                         </div>
 
-                        {error && (
-                            <p className="register-page__error">
-                                {error}
-                            </p>
-                        )}
+                        {error && <p className="register-page__error">{error}</p>}
 
-                        <button
-                            className="register-page__submit"
-                            type="submit"
-                            disabled={isLoading}
-                        >
-                            <span>
-                                {isLoading
-                                    ? 'Creating account...'
-                                    : 'Create account'}
-                            </span>
-
-                            {!isLoading && (
-                                <ArrowRight
-                                    size={18}
-                                />
-                            )}
+                        <button className="register-page__submit" type="submit" disabled={isLoading}>
+                            <span>{isLoading ? 'Creating account...' : 'Create account'}</span>
+                            {!isLoading && <ArrowRight size={18} />}
                         </button>
                     </form>
 
                     <p className="register-page__login">
-                        Already have an account?{' '}
-                        <Link to="/login">
-                            Sign in
-                        </Link>
+                        Already have an account? <Link to="/login">Sign in</Link>
                     </p>
                 </div>
             </section>

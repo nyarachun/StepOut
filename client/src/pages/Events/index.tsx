@@ -1,3 +1,4 @@
+import axios from 'axios';
 import {
     Activity,
     Baby,
@@ -30,27 +31,19 @@ import {
     useRef,
     useState,
 } from 'react';
-import {
-    ChevronLeft,
-    ChevronRight,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 import { getCategories, type Category } from '../../api/categories';
 import { getEvents } from '../../api/events';
 import { useCity } from '../../context/CityContext';
 import type { EventCardData } from '../../components/EventCard/EventCard';
-import {
-    EventCarousel,
-} from '../../components/EventCarousel/EventCarousel';
+import { EventCarousel } from '../../components/EventCarousel/EventCarousel';
 import { filterEvents } from '../../components/EventCarousel/eventFilters';
 
 import './Events.scss';
 
-const categoryIcons: Record<
-    string,
-    LucideIcon
-> = {
+const categoryIcons: Record<string, LucideIcon> = {
     Music,
     'Food & Drinks': Utensils,
     Sports: Dumbbell,
@@ -72,27 +65,18 @@ const categoryIcons: Record<
     Gaming: Gamepad2,
     'Kids & Family': Baby,
     Pets: PawPrint,
-    'Volunteering': HeartPulse,
+    Volunteering: HeartPulse,
     'Markets & Fairs': ShoppingBag,
     Business: Activity,
 };
 
-type DateFilter =
-    | 'anytime'
-    | 'week'
-    | 'month';
+type DateFilter = 'anytime' | 'week' | 'month';
 
-const getCategoryIcon = (
-    categoryName: string,
-) => {
-    return (
-        categoryIcons[categoryName] || Sparkles
-    );
+const getCategoryIcon = (categoryName: string) => {
+    return categoryIcons[categoryName] || Sparkles;
 };
 
-const getDateRange = (
-    dateFilter: DateFilter,
-) => {
+const getDateRange = (dateFilter: DateFilter) => {
     const now = new Date();
 
     if (dateFilter === 'anytime') {
@@ -101,24 +85,14 @@ const getDateRange = (
 
     if (dateFilter === 'week') {
         const currentDay = now.getDay();
-
-        const daysFromMonday =
-            currentDay === 0
-                ? 6
-                : currentDay - 1;
-
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
         const dateFrom = new Date(now);
 
-        dateFrom.setDate(
-            now.getDate() - daysFromMonday,
-        );
+        dateFrom.setDate(now.getDate() - daysFromMonday);
         dateFrom.setHours(0, 0, 0, 0);
 
         const dateTo = new Date(dateFrom);
-
-        dateTo.setDate(
-            dateFrom.getDate() + 6,
-        );
+        dateTo.setDate(dateFrom.getDate() + 6);
         dateTo.setHours(23, 59, 59, 999);
 
         return {
@@ -127,17 +101,8 @@ const getDateRange = (
         };
     }
 
-    const dateFrom = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-    );
-
-    const dateTo = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        0,
-    );
+    const dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    const dateTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     dateTo.setHours(23, 59, 59, 999);
 
@@ -149,67 +114,50 @@ const getDateRange = (
 
 const Events = () => {
     const [searchParams] = useSearchParams();
+    const { selectedCity } = useCity();
 
-    const {
-        selectedCity,
-    } = useCity();
+    const [events, setEvents] = useState<EventCardData[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>();
+    const [maxPrice, setMaxPrice] = useState(10000);
+    const [dateFilter, setDateFilter] = useState<DateFilter>('anytime');
+    const [isLoading, setIsLoading] = useState(true);
 
-    const [events, setEvents] = useState<
-        EventCardData[]
-    >([]);
+    const categoryListRef = useRef<HTMLDivElement | null>(null);
+    const [canScrollCategoriesLeft, setCanScrollCategoriesLeft] = useState(false);
+    const [canScrollCategoriesRight, setCanScrollCategoriesRight] = useState(true);
 
-    const [categories, setCategories] = useState<
-        Category[]
-    >([]);
-
-    const [selectedCategoryId, setSelectedCategoryId] =
-        useState<number | undefined>();
-
-    const [maxPrice, setMaxPrice] =
-        useState(10000);
-
-    const [dateFilter, setDateFilter] =
-        useState<DateFilter>('anytime');
-
-    const [isLoading, setIsLoading] =
-        useState(true);
-
-    const categoryListRef =
-        useRef<HTMLDivElement | null>(null);
-    const [canScrollCategoriesLeft, setCanScrollCategoriesLeft] =
-        useState(false);
-    const [canScrollCategoriesRight, setCanScrollCategoriesRight] =
-        useState(true);
-
-    const searchQuery =
-        searchParams.get('search') || '';
+    const searchQuery = searchParams.get('search') || '';
 
     useEffect(() => {
+        const controller = new AbortController();
+
         const loadData = async () => {
             try {
                 setIsLoading(true);
 
-                const [
-                    eventsData,
-                    categoriesData,
-                ] = await Promise.all([
-                    getEvents(),
+                const [eventsData, categoriesData] = await Promise.all([
+                    getEvents(undefined, { signal: controller.signal }),
                     getCategories(),
                 ]);
 
                 setEvents(eventsData);
                 setCategories(categoriesData);
             } catch (error) {
-                console.error(
-                    'Failed to load events page data',
-                    error,
-                );
+                if (axios.isCancel(error)) {
+                    return;
+                }
+                console.error('Failed to load events page data', error);
             } finally {
                 setIsLoading(false);
             }
         };
 
         loadData();
+
+        return () => {
+            controller.abort();
+        };
     }, []);
 
     useEffect(() => {
@@ -220,34 +168,31 @@ const Events = () => {
         }
 
         const updateCategoryButtons = () => {
-            const maxScrollLeft =
-                categoryList.scrollWidth - categoryList.clientWidth;
-
-            setCanScrollCategoriesLeft(
-                categoryList.scrollLeft > 1,
-            );
-            setCanScrollCategoriesRight(
-                categoryList.scrollLeft < maxScrollLeft - 1,
-            );
+            const maxScrollLeft = categoryList.scrollWidth - categoryList.clientWidth;
+            setCanScrollCategoriesLeft(categoryList.scrollLeft > 1);
+            setCanScrollCategoriesRight(categoryList.scrollLeft < maxScrollLeft - 1);
         };
 
-        const resizeObserver = new ResizeObserver(
-            updateCategoryButtons,
-        );
+        let ticking = false;
 
-        categoryList.addEventListener(
-            'scroll',
-            updateCategoryButtons,
-            { passive: true },
-        );
+        const onScroll = () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    updateCategoryButtons();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
+
+        const resizeObserver = new ResizeObserver(updateCategoryButtons);
+
+        categoryList.addEventListener('scroll', onScroll, { passive: true });
         resizeObserver.observe(categoryList);
         requestAnimationFrame(updateCategoryButtons);
 
         return () => {
-            categoryList.removeEventListener(
-                'scroll',
-                updateCategoryButtons,
-            );
+            categoryList.removeEventListener('scroll', onScroll);
             resizeObserver.disconnect();
         };
     }, [categories.length]);
@@ -265,39 +210,22 @@ const Events = () => {
             dateTo: dateRange.dateTo,
             search: searchQuery || undefined,
         };
-    }, [
-        selectedCity,
-        selectedCategoryId,
-        maxPrice,
-        dateRange,
-        searchQuery,
-    ]);
+    }, [selectedCity, selectedCategoryId, maxPrice, dateRange, searchQuery]);
 
     const recommendedEvents = useMemo(() => {
         const cityEvents = selectedCity
-            ? events.filter(
-                (event) =>
-                    event.cityId ===
-                    selectedCity.id,
-            )
+            ? events.filter((event) => event.cityId === selectedCity.id)
             : events;
 
-        return [...cityEvents]
-            .sort((a, b) => a.id - b.id)
-            .slice(0, 8);
-    }, [
-        events,
-        selectedCity,
-    ]);
+        return [...cityEvents].sort((a, b) => a.id - b.id).slice(0, 8);
+    }, [events, selectedCity]);
 
     const filteredEvents = useMemo(
         () => filterEvents(events, filters),
         [events, filters],
     );
 
-    const scrollCategories = (
-        direction: number,
-    ) => {
+    const scrollCategories = (direction: number) => {
         if (!categoryListRef.current) {
             return;
         }
@@ -308,25 +236,21 @@ const Events = () => {
         });
     };
 
-    const handleCategoryClick = (
-        categoryId?: number,
-    ) => {
+    const handleCategoryClick = (categoryId?: number) => {
         setSelectedCategoryId(categoryId);
     };
 
     const mainTitle = searchQuery
         ? `Search results for "${searchQuery}"`
         : selectedCity
-            ? `Events in ${selectedCity.name}`
-            : 'All events';
+        ? `Events in ${selectedCity.name}`
+        : 'All events';
 
     return (
         <main className="events-page">
             <div className="events-page__container">
                 <section className="events-page__intro">
-                    <h1 className="events-page__title">
-                        Find your next event
-                    </h1>
+                    <h1 className="events-page__title">Find your next event</h1>
                 </section>
 
                 <section className="events-page__categories">
@@ -337,9 +261,7 @@ const Events = () => {
                             <button
                                 type="button"
                                 disabled={!canScrollCategoriesLeft}
-                                onClick={() =>
-                                    scrollCategories(-1)
-                                }
+                                onClick={() => scrollCategories(-1)}
                                 aria-label="Previous categories"
                             >
                                 <ChevronLeft size={19} />
@@ -348,9 +270,7 @@ const Events = () => {
                             <button
                                 type="button"
                                 disabled={!canScrollCategoriesRight}
-                                onClick={() =>
-                                    scrollCategories(1)
-                                }
+                                onClick={() => scrollCategories(1)}
                                 aria-label="Next categories"
                             >
                                 <ChevronRight size={19} />
@@ -358,10 +278,7 @@ const Events = () => {
                         </div>
                     </div>
 
-                    <div
-                        className="events-page__category-row"
-                        ref={categoryListRef}
-                    >
+                    <div className="events-page__category-row" ref={categoryListRef}>
                         <button
                             className={
                                 selectedCategoryId === undefined
@@ -369,22 +286,15 @@ const Events = () => {
                                     : 'events-page__category'
                             }
                             type="button"
-                            onClick={() =>
-                                handleCategoryClick()
-                            }
+                            onClick={() => handleCategoryClick()}
                         >
                             <Activity size={19} />
                             <span>All</span>
                         </button>
 
                         {categories.map((category) => {
-                            const Icon = getCategoryIcon(
-                                category.name,
-                            );
-
-                            const isActive =
-                                selectedCategoryId ===
-                                category.id;
+                            const Icon = getCategoryIcon(category.name);
+                            const isActive = selectedCategoryId === category.id;
 
                             return (
                                 <button
@@ -395,11 +305,7 @@ const Events = () => {
                                     }
                                     type="button"
                                     key={category.id}
-                                    onClick={() =>
-                                        handleCategoryClick(
-                                            category.id,
-                                        )
-                                    }
+                                    onClick={() => handleCategoryClick(category.id)}
                                 >
                                     <Icon size={19} />
                                     <span>{category.name}</span>
@@ -413,10 +319,7 @@ const Events = () => {
                     <div className="events-page__filter">
                         <div className="events-page__filter-header">
                             <span>MAX PRICE</span>
-
-                            <strong>
-                                ₴{maxPrice.toLocaleString()}
-                            </strong>
+                            <strong>в‚ґ{maxPrice.toLocaleString()}</strong>
                         </div>
 
                         <input
@@ -426,44 +329,26 @@ const Events = () => {
                             max="10000"
                             step="100"
                             value={maxPrice}
-                            onChange={(event) =>
-                                setMaxPrice(
-                                    Number(event.target.value),
-                                )
-                            }
+                            onChange={(event) => setMaxPrice(Number(event.target.value))}
                         />
 
                         <div className="events-page__range-labels">
-                            <span>₴0</span>
-                            <span>₴10,000</span>
+                            <span>в‚ґ0</span>
+                            <span>в‚ґ10,000</span>
                         </div>
                     </div>
 
                     <div className="events-page__filter events-page__date-filter">
-                        <label htmlFor="date-filter">
-                            DATE
-                        </label>
+                        <label htmlFor="date-filter">DATE</label>
 
                         <select
                             id="date-filter"
                             value={dateFilter}
-                            onChange={(event) =>
-                                setDateFilter(
-                                    event.target.value as DateFilter,
-                                )
-                            }
+                            onChange={(event) => setDateFilter(event.target.value as DateFilter)}
                         >
-                            <option value="anytime">
-                                Anytime
-                            </option>
-
-                            <option value="week">
-                                This week
-                            </option>
-
-                            <option value="month">
-                                This month
-                            </option>
+                            <option value="anytime">Anytime</option>
+                            <option value="week">This week</option>
+                            <option value="month">This month</option>
                         </select>
                     </div>
                 </section>
@@ -493,40 +378,24 @@ const Events = () => {
                     </div>
 
                     {isLoading ? (
-                        <div className="events-page__loading">
-                            Loading events...
-                        </div>
+                        <div className="events-page__loading">Loading events...</div>
                     ) : (
-                        <EventCarousel
-                            title=""
-                            events={events}
-                            filters={filters}
-                        />
+                        <EventCarousel title="" events={events} filters={filters} />
                     )}
                 </section>
 
                 <section className="events-page__recommended">
                     <div className="events-page__recommended-header">
                         <div>
-                            <span className="events-page__eyebrow">
-                                JUST FOR YOU
-                            </span>
-
-                            <h2>
-                                Recommended for you
-                            </h2>
+                            <span className="events-page__eyebrow">JUST FOR YOU</span>
+                            <h2>Recommended for you</h2>
                         </div>
                     </div>
 
                     {isLoading ? (
-                        <div className="events-page__loading">
-                            Loading recommendations...
-                        </div>
+                        <div className="events-page__loading">Loading recommendations...</div>
                     ) : (
-                        <EventCarousel
-                            title=""
-                            events={recommendedEvents}
-                        />
+                        <EventCarousel title="" events={recommendedEvents} />
                     )}
                 </section>
             </div>

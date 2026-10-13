@@ -1,16 +1,14 @@
 import {
-    ForbiddenException,
-    Injectable,
-    NotFoundException,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 
 import { ChatParticipant } from '../chats/entities/chat-participant.entity.js';
-import {
-    Chat,
-    ChatType,
-} from '../chats/entities/chat.entity.js';
+import { Chat, ChatType } from '../chats/entities/chat.entity.js';
 import { Message } from '../chats/entities/message.entity.js';
 import { Event } from '../events/entities/event.entity.js';
 import { User, UserRole } from '../users/entities/user.entity.js';
@@ -19,153 +17,108 @@ import { BanEventDto } from './dto/ban-event.dto.js';
 
 @Injectable()
 export class AdminService {
-    constructor(
-        @InjectRepository(Event)
-        private readonly eventRepository: Repository<Event>,
+  constructor(
+    @InjectRepository(Event)
+    private readonly eventRepository: Repository<Event>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Chat)
+    private readonly chatRepository: Repository<Chat>,
+    private readonly dataSource: DataSource,
+  ) {}
 
-        @InjectRepository(User)
-        private readonly userRepository: Repository<User>,
+  async findAllEvents(userRole: UserRole) {
+    this.checkAdmin(userRole);
 
-        @InjectRepository(Chat)
-        private readonly chatRepository: Repository<Chat>,
+    try {
+      return await this.eventRepository.find({
+        relations: {
+          organizer: true,
+          category: true,
+          city: true,
+        },
+        order: {
+          createdAt: 'DESC',
+        },
+      });
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch events');
+    }
+  }
 
-        @InjectRepository(ChatParticipant)
-        private readonly chatParticipantRepository: Repository<ChatParticipant>,
+  async banEvent(eventId: number, userRole: UserRole, banEventDto: BanEventDto) {
+    this.checkAdmin(userRole);
 
-        @InjectRepository(Message)
-        private readonly messageRepository: Repository<Message>,
-    ) {}
+    const event = await this.eventRepository.findOne({
+      where: { id: eventId },
+      relations: { organizer: true },
+    });
 
-    async findAllEvents(
-        userRole: UserRole,
-    ) {
-        this.checkAdmin(userRole);
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
 
-        return this.eventRepository.find({
-            relations: {
-                organizer: true,
-                category: true,
-                city: true,
-            },
-            order: {
-                createdAt: 'DESC',
-            },
+    const organizer = await this.userRepository.findOneBy({ id: event.organizer.id });
+
+    if (!organizer) {
+      throw new NotFoundException('Event organizer not found');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const existingAdminChat = await queryRunner.manager.findOne(Chat, {
+        where: {
+          type: ChatType.ADMIN,
+          event: IsNull(),
+          participants: { user: { id: organizer.id } },
+        },
+        relations: { participants: { user: true } },
+      });
+
+      let chat = existingAdminChat;
+
+      if (!chat) {
+        chat = queryRunner.manager.create(Chat, {
+          type: ChatType.ADMIN,
+          event: null,
         });
+        chat = await queryRunner.manager.save(Chat, chat);
+
+        const participant = queryRunner.manager.create(ChatParticipant, {
+          chat,
+          user: organizer,
+          lastReadAt: null,
+        });
+        await queryRunner.manager.save(ChatParticipant, participant);
+      }
+
+      const message = queryRunner.manager.create(Message, {
+        chat,
+        sender: null,
+        isSystem: true,
+        text: `Your event "${event.title}" was removed by an administrator.\n\nReason: ${banEventDto.reason}`,
+      });
+      await queryRunner.manager.save(Message, message);
+
+      await queryRunner.manager.remove(Event, event);
+
+      await queryRunner.commitTransaction();
+
+      return { message: 'Event banned and removed successfully' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new InternalServerErrorException('Failed to ban event');
+    } finally {
+      await queryRunner.release();
     }
+  }
 
-    async banEvent(
-        eventId: number,
-        userRole: UserRole,
-        banEventDto: BanEventDto,
-    ) {
-        this.checkAdmin(userRole);
-
-        const event =
-            await this.eventRepository.findOne({
-                where: {
-                    id: eventId,
-                },
-                relations: {
-                    organizer: true,
-                },
-            });
-
-        if (!event) {
-            throw new NotFoundException(
-                'Event not found',
-            );
-        }
-
-        const organizer =
-            await this.userRepository.findOneBy({
-                id: event.organizer.id,
-            });
-
-        if (!organizer) {
-            throw new NotFoundException(
-                'Event organizer not found',
-            );
-        }
-
-        const existingAdminChat =
-            await this.chatRepository.findOne({
-                where: {
-                    type: ChatType.ADMIN,
-                    event: IsNull(),
-                    participants: {
-                        user: {
-                            id: organizer.id,
-                        },
-                    },
-                },
-                relations: {
-                    participants: {
-                        user: true,
-                    },
-                },
-            });
-
-        let chat =
-            existingAdminChat;
-
-        if (!chat) {
-            chat =
-                this.chatRepository.create({
-                    type: ChatType.ADMIN,
-                    event: null,
-                });
-
-            chat =
-                await this.chatRepository.save(
-                    chat,
-                );
-
-            const participant =
-                this.chatParticipantRepository.create(
-                    {
-                        chat,
-                        user: organizer,
-                        lastReadAt: null,
-                    },
-                );
-
-            await this.chatParticipantRepository.save(
-                participant,
-            );
-        }
-
-        const message =
-            this.messageRepository.create({
-                chat,
-                sender: null,
-                isSystem: true,
-                text: `Your event "${event.title}" was removed by an administrator.\n\nReason: ${banEventDto.reason}`,
-            });
-
-        await this.messageRepository.save(
-            message,
-        );
-
-        await this.eventRepository.remove(
-            event,
-        );
-
-        return {
-            message:
-                'Event banned and removed successfully',
-        };
+  private checkAdmin(userRole: UserRole) {
+    if (userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException('Admin access required');
     }
-
-    private checkAdmin(
-        userRole: UserRole,
-    ) {
-        if (
-            userRole !==
-            UserRole.ADMIN
-        ) {
-            throw new ForbiddenException(
-                'Admin access required',
-            );
-        }
-    }
+  }
 }

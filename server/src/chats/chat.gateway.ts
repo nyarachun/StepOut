@@ -8,6 +8,7 @@ import {
   type OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
   cors: {
@@ -19,46 +20,67 @@ import { Server, Socket } from 'socket.io';
     credentials: true,
   },
 })
-export class ChatGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private readonly connectedUsers = new Map<number, Set<string>>();
 
-  handleConnection(client: Socket) {
-    const userId = Number(client.handshake.query.userId);
+  constructor(private readonly jwtService: JwtService) {}
 
-    if (!userId || Number.isNaN(userId)) {
+  async handleConnection(client: Socket) {
+    try {
+      const token = client.handshake.auth?.token || client.handshake.headers.authorization?.split(' ')[1];
+      
+      if (!token) {
+        client.disconnect();
+        return;
+      }
+
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: process.env.JWT_SECRET,
+      });
+      const userId = Number(payload.sub);
+
+      if (Number.isNaN(userId)) {
+        client.disconnect();
+        return;
+      }
+
+      client.join(`user:${userId}`);
+
+      const sockets = this.connectedUsers.get(userId) ?? new Set<string>();
+      sockets.add(client.id);
+      this.connectedUsers.set(userId, sockets);
+    } catch {
       client.disconnect();
-      return;
     }
-
-    client.join(`user:${userId}`);
-
-    const sockets = this.connectedUsers.get(userId) ?? new Set<string>();
-    sockets.add(client.id);
-    this.connectedUsers.set(userId, sockets);
   }
 
   handleDisconnect(client: Socket) {
-    const userId = Number(client.handshake.query.userId);
+    try {
+      const token = client.handshake.auth?.token || client.handshake.headers.authorization?.split(' ')[1];
+      
+      if (!token) return;
 
-    if (!userId || Number.isNaN(userId)) {
+      const payload = this.jwtService.verify(token, {
+        secret: process.env.JWT_SECRET,
+      });
+      const userId = Number(payload.sub);
+
+      const sockets = this.connectedUsers.get(userId);
+
+      if (!sockets) {
+        return;
+      }
+
+      sockets.delete(client.id);
+
+      if (sockets.size === 0) {
+        this.connectedUsers.delete(userId);
+      }
+    } catch {
       return;
-    }
-
-    const sockets = this.connectedUsers.get(userId);
-
-    if (!sockets) {
-      return;
-    }
-
-    sockets.delete(client.id);
-
-    if (sockets.size === 0) {
-      this.connectedUsers.delete(userId);
     }
   }
 

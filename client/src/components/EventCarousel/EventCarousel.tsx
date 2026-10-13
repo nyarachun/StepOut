@@ -1,24 +1,7 @@
-import {
-    ChevronLeft,
-    ChevronRight,
-    MapPin,
-} from 'lucide-react';
-import {
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from 'react';
-
-import {
-    EventCard,
-    type EventCardData,
-} from '../EventCard/EventCard';
-import {
-    filterEvents,
-    type EventFilters,
-} from './eventFilters';
-
+import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { EventCard, type EventCardData } from '../EventCard/EventCard';
+import { filterEvents, type EventFilters } from './eventFilters';
 import './EventCarousel.scss';
 
 type EventCarouselProps = {
@@ -34,19 +17,16 @@ export const EventCarousel = ({
     events,
     filters,
 }: EventCarouselProps) => {
-    const carouselRef =
-        useRef<HTMLDivElement | null>(null);
-
-    const [canScrollLeft, setCanScrollLeft] =
-        useState(false);
-
-    const [canScrollRight, setCanScrollRight] =
-        useState(true);
+    const carouselRef = useRef<HTMLDivElement | null>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(true);
 
     const filteredEvents = useMemo(
         () => filterEvents(events, filters),
         [events, filters],
     );
+
+    const hasEvents = filteredEvents.length > 0;
 
     useEffect(() => {
         const carousel = carouselRef.current;
@@ -56,65 +36,37 @@ export const EventCarousel = ({
         }
 
         const updateScrollButtons = () => {
-            const maxScrollLeft =
-                carousel.scrollWidth -
-                carousel.clientWidth;
-
-            setCanScrollLeft(
-                carousel.scrollLeft > 1,
-            );
-
-            setCanScrollRight(
-                carousel.scrollLeft <
-                    maxScrollLeft - 1,
-            );
+            const maxScrollLeft = carousel.scrollWidth - carousel.clientWidth;
+            setCanScrollLeft(carousel.scrollLeft > 1);
+            setCanScrollRight(carousel.scrollLeft < maxScrollLeft - 1);
         };
 
-        const resizeObserver =
-            new ResizeObserver(
-                updateScrollButtons,
-            );
+        let ticking = false;
 
-        carousel.addEventListener(
-            'scroll',
-            updateScrollButtons,
-            {
-                passive: true,
-            },
-        );
+        const onScroll = () => {
+            if (!ticking) {
+                window.requestAnimationFrame(() => {
+                    updateScrollButtons();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        };
 
+        const resizeObserver = new ResizeObserver(updateScrollButtons);
+
+        carousel.addEventListener('scroll', onScroll, { passive: true });
         resizeObserver.observe(carousel);
 
-        requestAnimationFrame(
-            updateScrollButtons,
-        );
+        requestAnimationFrame(updateScrollButtons);
 
         return () => {
-            carousel.removeEventListener(
-                'scroll',
-                updateScrollButtons,
-            );
-
+            carousel.removeEventListener('scroll', onScroll);
             resizeObserver.disconnect();
         };
     }, [filteredEvents.length]);
 
-    useEffect(() => {
-        if (filteredEvents.length === 0) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setCanScrollLeft(false);
-            setCanScrollRight(false);
-
-            return;
-        }
-
-        setCanScrollLeft(false);
-        setCanScrollRight(true);
-    }, [filteredEvents.length]);
-
-    const scrollCarousel = (
-        direction: number,
-    ) => {
+    const scrollCarousel = (direction: number) => {
         if (!carouselRef.current) {
             return;
         }
@@ -140,18 +92,13 @@ export const EventCarousel = ({
                             {cityName && (
                                 <span className="event-carousel__city">
                                     <MapPin size={14} />
-                                    <span>
-                                        {cityName}
-                                    </span>
+                                    <span>{cityName}</span>
                                 </span>
                             )}
 
                             <span className="event-carousel__count">
                                 {filteredEvents.length}{' '}
-                                {filteredEvents.length ===
-                                1
-                                    ? 'event'
-                                    : 'events'}
+                                {filteredEvents.length === 1 ? 'event' : 'events'}
                             </span>
                         </div>
                     </div>
@@ -160,12 +107,8 @@ export const EventCarousel = ({
                         <button
                             className="event-carousel__arrow"
                             type="button"
-                            disabled={
-                                !canScrollLeft
-                            }
-                            onClick={() =>
-                                scrollCarousel(-1)
-                            }
+                            disabled={!hasEvents || !canScrollLeft}
+                            onClick={() => scrollCarousel(-1)}
                             aria-label="Previous events"
                         >
                             <ChevronLeft size={20} />
@@ -174,12 +117,8 @@ export const EventCarousel = ({
                         <button
                             className="event-carousel__arrow"
                             type="button"
-                            disabled={
-                                !canScrollRight
-                            }
-                            onClick={() =>
-                                scrollCarousel(1)
-                            }
+                            disabled={!hasEvents || !canScrollRight}
+                            onClick={() => scrollCarousel(1)}
                             aria-label="Next events"
                         >
                             <ChevronRight size={20} />
@@ -187,23 +126,13 @@ export const EventCarousel = ({
                     </div>
                 </div>
 
-                {filteredEvents.length > 0 ? (
-                    <div
-                        className="event-carousel__list"
-                        ref={carouselRef}
-                    >
-                        {filteredEvents.map(
-                            (event) => (
-                                <div
-                                    className="event-carousel__item"
-                                    key={event.id}
-                                >
-                                    <EventCard
-                                        event={event}
-                                    />
-                                </div>
-                            ),
-                        )}
+                {hasEvents ? (
+                    <div className="event-carousel__list" ref={carouselRef}>
+                        {filteredEvents.map((event) => (
+                            <div className="event-carousel__item" key={event.id}>
+                                <EventCard event={event} />
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="event-carousel__empty">
