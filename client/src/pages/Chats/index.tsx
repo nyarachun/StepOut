@@ -2,9 +2,7 @@ import axios from 'axios';
 import { MessageCircle, Send } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
 
-import { API_URL } from '../../api/api';
 import {
     getChatMessages,
     getMyChats,
@@ -19,8 +17,8 @@ import { useChat } from '../../context/useChat';
 import './Chats.scss';
 
 const Chats = () => {
-    const { isAuthenticated, user } = useAuth();
-    const { refreshUnreadCount } = useChat();
+    const { isAuthenticated } = useAuth();
+    const { refreshUnreadCount, socket } = useChat();
     const [searchParams] = useSearchParams();
 
     const requestedChatId = Number(searchParams.get('chat'));
@@ -33,27 +31,6 @@ const Chats = () => {
     const [isMessagesLoading, setIsMessagesLoading] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState('');
-    const [socket, setSocket] = useState<Socket | null>(null);
-
-    useEffect(() => {
-        if (!isAuthenticated || !user?.id) {
-            return;
-        }
-
-        const newSocket = io(API_URL, {
-            transports: ['websocket'],
-            query: { userId: String(user.id) },
-        });
-
-        newSocket.on('connect', () => {
-            setSocket(newSocket);
-        });
-
-        return () => {
-            newSocket.disconnect();
-            setSocket(null);
-        };
-    }, [isAuthenticated, user?.id]);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -119,21 +96,27 @@ const Chats = () => {
 
         void loadMessages();
 
+        const handleIncomingMessage = (newMessage: Message) => {
+            setMessages((currentMessages) => {
+                if (currentMessages.some((msg) => msg.id === newMessage.id)) {
+                    return currentMessages;
+                }
+                return [...currentMessages, newMessage];
+            });
+            void markChatAsRead(selectedChatId);
+            void refreshUnreadCount();
+        };
+
         if (socket) {
             socket.emit('joinChat', { chatId: selectedChatId });
-
-            socket.on('newMessage', (newMessage: Message) => {
-                setMessages((currentMessages) => [...currentMessages, newMessage]);
-                void markChatAsRead(selectedChatId);
-                void refreshUnreadCount();
-            });
+            socket.on('newMessage', handleIncomingMessage);
         }
 
         return () => {
             controller.abort();
             if (socket) {
                 socket.emit('leaveChat', { chatId: selectedChatId });
-                socket.off('newMessage');
+                socket.off('newMessage', handleIncomingMessage);
             }
         };
     }, [selectedChatId, socket, refreshUnreadCount]);
@@ -200,7 +183,12 @@ const Chats = () => {
 
         try {
             const message = await sendMessage(selectedChatId, text);
-            setMessages((currentMessages) => [...currentMessages, message]);
+            setMessages((currentMessages) => {
+                if (currentMessages.some((msg) => msg.id === message.id)) {
+                    return currentMessages;
+                }
+                return [...currentMessages, message];
+            });
             setMessageText('');
         } catch {
             setError('Could not send message.');

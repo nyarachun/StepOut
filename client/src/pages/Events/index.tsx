@@ -3,14 +3,16 @@ import {
     Activity,
     Baby,
     Camera,
+    ChevronLeft,
+    ChevronRight,
     Clapperboard,
     Dumbbell,
     Gamepad2,
     Gem,
     GraduationCap,
     HeartPulse,
-    Laugh,
     Laptop,
+    Laugh,
     Map,
     MapPin,
     Mic2,
@@ -20,8 +22,8 @@ import {
     ShoppingBag,
     Sparkles,
     Theater,
-    Utensils,
     Users,
+    Utensils,
     Wrench,
     type LucideIcon,
 } from 'lucide-react';
@@ -31,15 +33,15 @@ import {
     useRef,
     useState,
 } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
-import { getCategories, type Category } from '../../api/categories';
+import { api } from '../../api/api';
+import { type Category } from '../../api/categories';
 import { getEvents } from '../../api/events';
-import { useCity } from '../../context/CityContext';
 import type { EventCardData } from '../../components/EventCard/EventCard';
 import { EventCarousel } from '../../components/EventCarousel/EventCarousel';
 import { filterEvents } from '../../components/EventCarousel/eventFilters';
+import { useCity } from '../../context/CityContext';
 
 import './Events.scss';
 
@@ -136,24 +138,23 @@ const Events = () => {
             try {
                 setIsLoading(true);
 
-                const [eventsData, categoriesData] = await Promise.all([
+                const [eventsData, categoriesResponse] = await Promise.all([
                     getEvents(undefined, { signal: controller.signal }),
-                    getCategories(),
+                    api.get<Category[]>('/categories', { signal: controller.signal }),
                 ]);
 
                 setEvents(eventsData);
-                setCategories(categoriesData);
+                setCategories(categoriesResponse.data);
             } catch (error) {
                 if (axios.isCancel(error)) {
                     return;
                 }
-                console.error('Failed to load events page data', error);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        loadData();
+        void loadData();
 
         return () => {
             controller.abort();
@@ -319,7 +320,7 @@ const Events = () => {
                     <div className="events-page__filter">
                         <div className="events-page__filter-header">
                             <span>MAX PRICE</span>
-                            <strong>в‚ґ{maxPrice.toLocaleString()}</strong>
+                            <strong>{maxPrice.toLocaleString()} UAH</strong>
                         </div>
 
                         <input
@@ -333,8 +334,8 @@ const Events = () => {
                         />
 
                         <div className="events-page__range-labels">
-                            <span>в‚ґ0</span>
-                            <span>в‚ґ10,000</span>
+                            <span>0 UAH</span>
+                            <span>10,000 UAH</span>
                         </div>
                     </div>
 

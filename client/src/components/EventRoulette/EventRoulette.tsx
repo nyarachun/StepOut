@@ -104,7 +104,7 @@ export const EventRoulette = () => {
                     <div className="event-roulette__budget">
                         <div className="event-roulette__budget-header">
                             <span>YOUR BUDGET</span>
-                            <strong>в‚ґ{budget.toLocaleString()}</strong>
+                            <strong>{budget.toLocaleString()} UAH</strong>
                         </div>
                         <input
                             className="event-roulette__range"

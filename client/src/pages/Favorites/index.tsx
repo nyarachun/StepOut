@@ -1,8 +1,9 @@
+import axios from 'axios';
 import { useEffect, useState } from 'react';
 
 import { getEvents } from '../../api/events';
-import { EventCarousel } from '../../components/EventCarousel/EventCarousel';
 import type { EventCardData } from '../../components/EventCard/EventCard';
+import { EventCarousel } from '../../components/EventCarousel/EventCarousel';
 import { useFavorites } from '../../context/FavoritesContext';
 
 import './Favorites.scss';
@@ -14,20 +15,29 @@ const Favorites = () => {
     const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
+        const controller = new AbortController();
+
         const loadEvents = async () => {
             try {
                 setIsLoading(true);
                 setHasError(false);
-                setEvents(await getEvents());
+                const data = await getEvents(undefined, { signal: controller.signal });
+                setEvents(data);
             } catch (error) {
+                if (axios.isCancel(error)) {
+                    return;
+                }
                 setHasError(true);
-                console.error('Failed to load favorite events', error);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        loadEvents();
+        void loadEvents();
+
+        return () => {
+            controller.abort();
+        };
     }, []);
 
     const favoriteEvents = events.filter((event) =>

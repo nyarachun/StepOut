@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { CalendarDays, Check, MapPin, Users, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, MapPin, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -162,7 +162,7 @@ const EventRegistration = () => {
                                         month: 'long',
                                         year: 'numeric',
                                     })}
-                                    {' В· '}
+                                    {' · '}
                                     {eventDate.toLocaleTimeString('en-US', {
                                         hour: '2-digit',
                                         minute: '2-digit',

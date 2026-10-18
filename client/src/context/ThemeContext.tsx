@@ -1,60 +1,64 @@
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
 } from 'react';
 
 type Theme = 'light' | 'dark';
 
 type ThemeContextType = {
-  theme: Theme;
-  toggleTheme: () => void;
+    theme: Theme;
+    toggleTheme: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 type ThemeProviderProps = {
-  children: ReactNode;
+    children: ReactNode;
 };
 
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('theme');
+    const [theme, setTheme] = useState<Theme>(() => {
+        const savedTheme = localStorage.getItem('theme');
 
-    return savedTheme === 'light' ? 'light' : 'dark';
-  });
+        return savedTheme === 'light' ? 'light' : 'dark';
+    });
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
 
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    const toggleTheme = useCallback(() => {
+        setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
+    }, []);
 
-  const toggleTheme = () => {
-    setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'));
-  };
+    const value = useMemo(
+        () => ({
+            theme,
+            toggleTheme,
+        }),
+        [theme, toggleTheme],
+    );
 
-  return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        toggleTheme,
-      }}
-    >
-      {children}
-    </ThemeContext.Provider>
-  );
+    return (
+        <ThemeContext.Provider value={value}>
+            {children}
+        </ThemeContext.Provider>
+    );
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => {
-  const context = useContext(ThemeContext);
+    const context = useContext(ThemeContext);
 
-  if (!context) {
-    throw new Error('useTheme must be used inside ThemeProvider');
-  }
+    if (!context) {
+        throw new Error('useTheme must be used inside ThemeProvider');
+    }
 
-  return context;
+    return context;
 };

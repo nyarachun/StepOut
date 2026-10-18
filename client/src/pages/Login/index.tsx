@@ -1,10 +1,10 @@
+import axios from 'axios';
 import {
     ArrowRight,
     Check,
     Eye,
     EyeOff,
 } from 'lucide-react';
-import axios from 'axios';
 import {
     useState,
     type FormEvent,
@@ -23,6 +23,7 @@ import './Login.scss';
 
 type LoginLocationState = {
     email?: string;
+    from?: string;
 };
 
 const Login = () => {
@@ -60,12 +61,12 @@ const Login = () => {
 
         try {
             const response = await api.post('/auth/login', {
-                email,
+                email: email.trim(),
                 password,
             });
 
             login(response.data.access_token, rememberMe);
-            navigate('/profile');
+            navigate(locationState?.from || '/profile', { replace: true });
         } catch (requestError) {
             if (axios.isAxiosError(requestError)) {
                 const message = requestError.response?.data?.message;
@@ -124,7 +125,8 @@ const Login = () => {
                                 }
                                 required
                                 autoComplete="email"
-                                className="login__fieldEmail"></input>
+                                className="login__fieldEmail"
+                            />
                         </div>
 
                         <div className="login__field">
@@ -242,7 +244,7 @@ const Login = () => {
                     </p>
                 </div>
             </section>
-        </main >
+        </main>
     );
 };
 

@@ -1,6 +1,8 @@
 import {
     createContext,
+    useCallback,
     useContext,
+    useMemo,
     useState,
     type ReactNode,
 } from 'react';
@@ -42,7 +44,7 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
         getStoredFavoriteIds,
     );
 
-    const toggleFavorite = (eventId: number) => {
+    const toggleFavorite = useCallback((eventId: number) => {
         setFavoriteEventIds((currentIds) => {
             const nextIds = currentIds.includes(eventId)
                 ? currentIds.filter((id) => id !== eventId)
@@ -52,19 +54,24 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
 
             return nextIds;
         });
-    };
+    }, []);
 
-    const isFavorite = (eventId: number) =>
-        favoriteEventIds.includes(eventId);
+    const isFavorite = useCallback(
+        (eventId: number) => favoriteEventIds.includes(eventId),
+        [favoriteEventIds],
+    );
+
+    const value = useMemo(
+        () => ({
+            favoriteEventIds,
+            isFavorite,
+            toggleFavorite,
+        }),
+        [favoriteEventIds, isFavorite, toggleFavorite],
+    );
 
     return (
-        <FavoritesContext.Provider
-            value={{
-                favoriteEventIds,
-                isFavorite,
-                toggleFavorite,
-            }}
-        >
+        <FavoritesContext.Provider value={value}>
             {children}
         </FavoritesContext.Provider>
     );

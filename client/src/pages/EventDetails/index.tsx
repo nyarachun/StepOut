@@ -10,8 +10,8 @@ import {
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { api } from '../../api/api';
 import { banEvent } from '../../api/admin';
+import { api } from '../../api/api';
 import { createEventChat } from '../../api/chats';
 import { getMyRegistration } from '../../api/registrations';
 import { useAuth } from '../../context/AuthContext';
@@ -79,7 +79,7 @@ const EventDetails = () => {
                 setEvent(response.data);
             } catch (requestError) {
                 if (axios.isCancel(requestError)) return;
-                
+
                 if (axios.isAxiosError(requestError)) {
                     const message = requestError.response?.data?.message;
                     setError(
@@ -288,7 +288,7 @@ const EventDetails = () => {
                                             month: 'long',
                                             year: 'numeric',
                                         })}
-                                        {' В· '}
+                                        {' · '}
                                         {eventDate.toLocaleTimeString('en-US', {
                                             hour: '2-digit',
                                             minute: '2-digit',

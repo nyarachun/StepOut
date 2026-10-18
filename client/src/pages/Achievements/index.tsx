@@ -1,9 +1,10 @@
 import axios from 'axios';
-import { Award, Lock } from 'lucide-react';
+import { ArrowLeft, Award, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { getMyAchievements, type UserAchievement } from '../../api/achievements';
+import { type UserAchievement } from '../../api/achievements';
+import { api } from '../../api/api';
 
 import './Achievements.scss';
 
@@ -25,8 +26,10 @@ const Achievements = () => {
 
         const loadAchievements = async () => {
             try {
-                const data = await getMyAchievements();
-                setAchievementData(data);
+                const response = await api.get<AchievementsData>('/achievements/me', {
+                    signal: controller.signal,
+                });
+                setAchievementData(response.data);
             } catch (err) {
                 if (axios.isCancel(err)) return;
                 setError('Failed to load achievements.');
@@ -50,7 +53,8 @@ const Achievements = () => {
         <main className="achievements-page">
             <div className="achievements-page__container">
                 <Link className="achievements-page__back" to="/profile">
-                    ← Back to profile
+                    <ArrowLeft size={17} />
+                    <span>Back to profile</span>
                 </Link>
 
                 <section className="achievements-page__intro">

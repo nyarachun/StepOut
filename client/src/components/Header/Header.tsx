@@ -11,27 +11,29 @@ import {
     X,
 } from 'lucide-react';
 import {
-    useState,
     useEffect,
+    useState,
     type ChangeEvent,
 } from 'react';
 import {
     Link,
     useNavigate,
+    useSearchParams,
 } from 'react-router-dom';
 
 import { useAuth } from '../../context/AuthContext';
-import { useChat } from '../../context/useChat';
 import { useCity } from '../../context/CityContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useChat } from '../../context/useChat';
 import { BurgerMenu } from '../BurgerMenu/BurgerMenu';
 
 import './Header.scss';
 
 export const Header = () => {
+    const [searchParams] = useSearchParams();
     const [isCityOpen, setIsCityOpen] = useState(false);
     const [isBurgerOpen, setIsBurgerOpen] = useState(false);
-    const [searchValue, setSearchValue] = useState('');
+    const [searchValue, setSearchValue] = useState(() => searchParams.get('search') || '');
     const [isTyping, setIsTyping] = useState(false);
 
     const { cities, selectedCity, setSelectedCity } = useCity();
@@ -47,7 +49,7 @@ export const Header = () => {
         }
 
         const timer = setTimeout(() => {
-            const search = searchValue.trimStart();
+            const search = searchValue.trim();
             navigate(search ? `/events?search=${encodeURIComponent(search)}` : '/events');
             setIsTyping(false);
         }, 400);

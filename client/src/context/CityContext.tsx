@@ -1,82 +1,96 @@
+import axios from 'axios';
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
 } from 'react';
 
-import { getCities } from '../api/cities';
+import { api } from '../api/api';
 import type { City } from '../types/city';
 
 type CityContextType = {
-  cities: City[];
-  selectedCity: City | null;
-  setSelectedCity: (city: City) => void;
+    cities: City[];
+    selectedCity: City | null;
+    setSelectedCity: (city: City) => void;
 };
 
 const CityContext = createContext<CityContextType | null>(null);
 
 type CityProviderProps = {
-  children: ReactNode;
+    children: ReactNode;
 };
 
 export const CityProvider = ({ children }: CityProviderProps) => {
-  const [cities, setCities] = useState<City[]>([]);
-  const [selectedCity, setSelectedCityState] = useState<City | null>(null);
+    const [cities, setCities] = useState<City[]>([]);
+    const [selectedCity, setSelectedCityState] = useState<City | null>(null);
 
-  useEffect(() => {
-    const loadCities = async () => {
-      try {
-        const data = await getCities();
-        console.log('Cities from API:', data);
+    useEffect(() => {
+        const controller = new AbortController();
 
-        setCities(data);
+        const loadCities = async () => {
+            try {
+                const response = await api.get<City[]>('/cities', {
+                    signal: controller.signal,
+                });
+                const data = response.data;
 
-        const savedCityId = localStorage.getItem('selectedCityId');
+                setCities(data);
 
-        const savedCity = data.find((city) => city.id === Number(savedCityId));
+                const savedCityId = localStorage.getItem('selectedCityId');
+                const savedCity = data.find((city) => city.id === Number(savedCityId));
 
-        const defaultCity =
-          savedCity || data.find((city) => city.name === 'Lviv');
+                const defaultCity =
+                    savedCity || data.find((city) => city.name === 'Lviv') || data[0] || null;
 
-        if (defaultCity) {
-          setSelectedCityState(defaultCity);
-        }
-      } catch (error) {
-        console.error('Failed to load cities', error);
-      }
-    };
+                if (defaultCity) {
+                    setSelectedCityState(defaultCity);
+                }
+            } catch (error) {
+                if (axios.isCancel(error)) {
+                    return;
+                }
+            }
+        };
 
-    loadCities();
-  }, []);
+        void loadCities();
 
-  const setSelectedCity = (city: City) => {
-    setSelectedCityState(city);
+        return () => {
+            controller.abort();
+        };
+    }, []);
 
-    localStorage.setItem('selectedCityId', String(city.id));
-  };
+    const setSelectedCity = useCallback((city: City) => {
+        setSelectedCityState(city);
+        localStorage.setItem('selectedCityId', String(city.id));
+    }, []);
 
-  return (
-    <CityContext.Provider
-      value={{
-        cities,
-        selectedCity,
-        setSelectedCity,
-      }}
-    >
-      {children}
-    </CityContext.Provider>
-  );
+    const value = useMemo(
+        () => ({
+            cities,
+            selectedCity,
+            setSelectedCity,
+        }),
+        [cities, selectedCity, setSelectedCity],
+    );
+
+    return (
+        <CityContext.Provider value={value}>
+            {children}
+        </CityContext.Provider>
+    );
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useCity = () => {
-  const context = useContext(CityContext);
+    const context = useContext(CityContext);
 
-  if (!context) {
-    throw new Error('useCity must be used inside CityProvider');
-  }
+    if (!context) {
+        throw new Error('useCity must be used inside CityProvider');
+    }
 
-  return context;
+    return context;
 };

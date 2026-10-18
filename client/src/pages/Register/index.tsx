@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -14,7 +14,7 @@ const PASSWORD_MIN_LENGTH = 8;
 const PASSWORD_MAX_LENGTH = 64;
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const nameRegex = /^[A-Za-zА-Яа-яІіЇїЄєҐґ' -]+$/;
+const nameRegex = /^[\p{L}' -]+$/u;
 
 const Register = () => {
     const navigate = useNavigate();
@@ -112,7 +112,8 @@ const Register = () => {
             <section className="register-page__content">
                 <div className="register-page__container">
                     <Link to="/login" className="register-page__back">
-                        в†ђ Back to sign in
+                        <ArrowLeft size={16} />
+                        <span>Back to sign in</span>
                     </Link>
 
                     <span className="register-page__eyebrow">STEP INTO SOMETHING NEW</span>

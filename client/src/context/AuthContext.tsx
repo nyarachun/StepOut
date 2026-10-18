@@ -1,7 +1,10 @@
+import axios from 'axios';
 import {
     createContext,
+    useCallback,
     useContext,
     useEffect,
+    useMemo,
     useState,
     type ReactNode,
 } from 'react';
@@ -66,40 +69,66 @@ export const AuthProvider = ({
         );
 
     const [isLoading, setIsLoading] =
-        useState(true);
+        useState(() =>
+            Boolean(getStoredToken()),
+        );
 
-    const refreshUser =
-        async () => {
-            const token =
-                getStoredToken();
+    const refreshUser = useCallback(async (signal?: AbortSignal) => {
+        const token = getStoredToken();
 
-            if (!token) {
-                setUser(null);
-                setIsAuthenticated(false);
-                setIsLoading(false);
+        if (!token) {
+            setUser(null);
+            setIsAuthenticated(false);
+            setIsLoading(false);
+            return;
+        }
 
+        try {
+            const response = await api.get<CurrentUser>('/users/me', {
+                signal,
+            });
+
+            setUser(response.data);
+            setIsAuthenticated(true);
+        } catch (error) {
+            if (axios.isCancel(error)) {
                 return;
             }
 
+            localStorage.removeItem('accessToken');
+            sessionStorage.removeItem('accessToken');
+
+            setUser(null);
+            setIsAuthenticated(false);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        const token = getStoredToken();
+
+        if (!token) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        const loadInitialUser = async () => {
             try {
-                const response =
-                    await api.get<CurrentUser>(
-                        '/users/me',
-                    );
+                const response = await api.get<CurrentUser>('/users/me', {
+                    signal: controller.signal,
+                });
 
-                setUser(
-                    response.data,
-                );
-
+                setUser(response.data);
                 setIsAuthenticated(true);
-            } catch {
-                localStorage.removeItem(
-                    'accessToken',
-                );
+            } catch (error) {
+                if (axios.isCancel(error)) {
+                    return;
+                }
 
-                sessionStorage.removeItem(
-                    'accessToken',
-                );
+                localStorage.removeItem('accessToken');
+                sessionStorage.removeItem('accessToken');
 
                 setUser(null);
                 setIsAuthenticated(false);
@@ -108,61 +137,52 @@ export const AuthProvider = ({
             }
         };
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        refreshUser();
+        void loadInitialUser();
+
+        return () => {
+            controller.abort();
+        };
     }, []);
 
-    const login = (
-        token: string,
-        rememberMe: boolean,
-    ) => {
-        localStorage.removeItem(
-            'accessToken',
-        );
+    const login = useCallback(
+        (token: string, rememberMe: boolean) => {
+            localStorage.removeItem('accessToken');
+            sessionStorage.removeItem('accessToken');
 
-        sessionStorage.removeItem(
-            'accessToken',
-        );
+            const storage = rememberMe
+                ? localStorage
+                : sessionStorage;
 
-        const storage = rememberMe
-            ? localStorage
-            : sessionStorage;
+            storage.setItem('accessToken', token);
 
-        storage.setItem(
-            'accessToken',
-            token,
-        );
+            setIsAuthenticated(true);
+            void refreshUser();
+        },
+        [refreshUser],
+    );
 
-        setIsAuthenticated(true);
-
-        void refreshUser();
-    };
-
-    const logout = () => {
-        localStorage.removeItem(
-            'accessToken',
-        );
-
-        sessionStorage.removeItem(
-            'accessToken',
-        );
+    const logout = useCallback(() => {
+        localStorage.removeItem('accessToken');
+        sessionStorage.removeItem('accessToken');
 
         setUser(null);
         setIsAuthenticated(false);
-    };
+    }, []);
+
+    const value = useMemo(
+        () => ({
+            isAuthenticated,
+            user,
+            isLoading,
+            login,
+            logout,
+            refreshUser: () => refreshUser(),
+        }),
+        [isAuthenticated, user, isLoading, login, logout, refreshUser],
+    );
 
     return (
-        <AuthContext.Provider
-            value={{
-                isAuthenticated,
-                user,
-                isLoading,
-                login,
-                logout,
-                refreshUser,
-            }}
-        >
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );
@@ -170,8 +190,7 @@ export const AuthProvider = ({
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
-    const context =
-        useContext(AuthContext);
+    const context = useContext(AuthContext);
 
     if (!context) {
         throw new Error(

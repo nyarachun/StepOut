@@ -5,33 +5,36 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../../api/api';
 import { deleteEvent, type EventItem } from '../../api/events';
-import { cancelRegistration, type Registration, getMyRegistrations } from '../../api/registrations';
+import { cancelRegistration, getMyRegistrations, type Registration } from '../../api/registrations';
+import { useAuth } from '../../context/AuthContext';
 
 import './MyEvents.scss';
 
-type UserRole = 'user' | 'organizer' | 'admin';
-
 const MyEvents = () => {
+    const { user } = useAuth();
     const [events, setEvents] = useState<EventItem[]>([]);
     const [registrations, setRegistrations] = useState<Registration[]>([]);
-    const [role, setRole] = useState<UserRole>('user');
     const [isLoading, setIsLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [cancellingId, setCancellingId] = useState<number | null>(null);
     const [error, setError] = useState('');
 
+    const currentRole = user?.role || 'user';
+    const isOrganizer = currentRole === 'organizer';
+
     useEffect(() => {
+        if (!user) {
+            return;
+        }
+
         const controller = new AbortController();
 
         const loadData = async () => {
-            try {
-                const profileResponse = await api.get<{ role: UserRole }>('/users/me', {
-                    signal: controller.signal,
-                });
-                const currentRole = profileResponse.data.role;
-                setRole(currentRole);
+            setIsLoading(true);
+            setError('');
 
-                if (currentRole === 'organizer') {
+            try {
+                if (user.role === 'organizer') {
                     const response = await api.get<EventItem[]>('/events/my', {
                         signal: controller.signal,
                     });
@@ -63,7 +66,7 @@ const MyEvents = () => {
         return () => {
             controller.abort();
         };
-    }, []);
+    }, [user]);
 
     const handleDelete = async (eventId: number) => {
         const confirmed = window.confirm('Are you sure you want to delete this event?');
@@ -128,8 +131,6 @@ const MyEvents = () => {
             </main>
         );
     }
-
-    const isOrganizer = role === 'organizer';
 
     return (
         <main className="my-events">

@@ -1,19 +1,25 @@
 import axios from 'axios';
-import { Award, Edit3, Eye, EyeOff, LockKeyhole, Mail, Save, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowRight, Award, Edit3, Eye, EyeOff, LockKeyhole, Mail, Save, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { getMyAchievements } from '../../api/achievements';
+import { type UserAchievement } from '../../api/achievements';
+import { api } from '../../api/api';
 import { changeMyPassword, getMyProfile, updateMyProfile, type UserProfile } from '../../api/users';
 import { interests } from '../../data/interests';
-import { profileSchema } from '../../schemas/profileSchema';
 import { changePasswordSchema } from '../../schemas/changePasswordSchema';
+import { profileSchema } from '../../schemas/profileSchema';
 
 import './Profile.scss';
 
+type AchievementsResponse = {
+    earned: UserAchievement[];
+    all: UserAchievement[];
+};
+
 const Profile = () => {
     const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [achievementData, setAchievementData] = useState<Awaited<ReturnType<typeof getMyAchievements>>>({
+    const [achievementData, setAchievementData] = useState<AchievementsResponse>({
         earned: [],
         all: [],
     });
@@ -50,13 +56,15 @@ const Profile = () => {
 
         const loadProfile = async () => {
             try {
-                const [profileData, achievements] = await Promise.all([
+                const [profileData, achievementsResponse] = await Promise.all([
                     getMyProfile({ signal: controller.signal }),
-                    getMyAchievements(),
+                    api.get<AchievementsResponse>('/achievements/me', {
+                        signal: controller.signal,
+                    }),
                 ]);
 
                 setProfile(profileData);
-                setAchievementData(achievements);
+                setAchievementData(achievementsResponse.data);
 
                 setForm({
                     name: profileData.name,
@@ -482,7 +490,7 @@ const Profile = () => {
                                 </div>
                                 <Link className="profile-page__all-link" to="/achievements">
                                     <span>View all</span>
-                                    <span>в†’</span>
+                                    <ArrowRight size={16} />
                                 </Link>
                             </div>
 

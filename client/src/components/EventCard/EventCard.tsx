@@ -103,9 +103,9 @@ export const EventCard = ({
                         <Ticket size={15} />
 
                         <span>
-                            {event.price === 0
+                            {Number(event.price) === 0
                                 ? 'Free'
-                                : `₴${event.price.toLocaleString()}`}
+                                : `${event.price.toLocaleString()} UAH`}
                         </span>
                     </div>
                 </div>
