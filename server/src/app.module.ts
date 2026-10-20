@@ -11,54 +11,29 @@ import { AuthModule } from './auth/auth.module.js';
 import { AchievementsModule } from './achievements/achievements.module.js';  
 import { ChatsModule } from './chats/chats.module.js';  
 import { AdminModule } from './admin/admin.module.js';  
-import { LoggerModule } from 'nestjs-pino';  
   
 @Module({  
- imports: [  
- LoggerModule.forRoot({  
-   
-pinoHttp: {  
- level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',  
- transport: process.env.NODE_ENV !== 'production'  
- ? {  
- target: 'pino-pretty',  
- options: {  
- singleLine: true,  
- colorize: true,  
- },  
- }  
- : undefined,  
- },  
- }),  
-  
- ConfigModule.forRoot({  
- isGlobal: true,  
- }),  
-  
- TypeOrmModule.forRoot({  
- type: 'postgres',  
- url: process.env.DATABASE_URL,  
- autoLoadEntities: true,  
- synchronize: process.env.NODE_ENV !== 'production',
- migrationsRun: true,  
- }),  
-  
- UsersModule,  
-  
- CitiesModule,  
-  
- CategoriesModule,  
-  
- RegistrationsModule,  
-  
- FavoritesModule,  
-  
- EventsModule,  
-  
- AuthModule,  
- AchievementsModule,  
- ChatsModule,  
- AdminModule,  
- ],  
+  imports: [  
+    ConfigModule.forRoot({  
+      isGlobal: true,  
+    }),  
+    TypeOrmModule.forRoot({  
+      type: 'postgres',  
+      url: process.env.DATABASE_URL,  
+      autoLoadEntities: true,  
+      synchronize: process.env.NODE_ENV !== 'production',
+      migrationsRun: true,  
+    }),  
+    UsersModule,  
+    CitiesModule,  
+    CategoriesModule,  
+    RegistrationsModule,  
+    FavoritesModule,  
+    EventsModule,  
+    AuthModule,  
+    AchievementsModule,  
+    ChatsModule,  
+    AdminModule,  
+  ],  
 })  
 export class AppModule {}

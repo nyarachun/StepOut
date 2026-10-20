@@ -2,7 +2,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/exception.filter.js';
 import { AppModule } from './app.module.js';
-import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 
@@ -40,8 +39,6 @@ async function start() {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useLogger(app.get(Logger));
-
   app.use(cookieParser()); 
 
   await app.listen(PORT, '0.0.0.0');
