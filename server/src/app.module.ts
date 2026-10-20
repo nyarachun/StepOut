@@ -11,12 +11,22 @@ import { AuthModule } from './auth/auth.module.js';
 import { AchievementsModule } from './achievements/achievements.module.js';  
 import { ChatsModule } from './chats/chats.module.js';  
 import { AdminModule } from './admin/admin.module.js';  
+import { LoggerModule } from 'nestjs-pino';
   
 @Module({  
   imports: [  
     ConfigModule.forRoot({  
       isGlobal: true,  
     }),  
+    LoggerModule.forRoot({
+  pinoHttp: {
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transport:
+      process.env.NODE_ENV !== 'production'
+        ? { target: 'pino-pretty' }
+        : undefined,
+  },
+}),
     TypeOrmModule.forRoot({  
       type: 'postgres',  
       url: process.env.DATABASE_URL,  

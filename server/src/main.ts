@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/exception.filter.js';
 import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import cookieParser from 'cookie-parser';
 
 async function start() {
@@ -11,6 +12,8 @@ async function start() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
+
+  app.useLogger(app.get(Logger));
 
   app.enableCors({
     origin: [
