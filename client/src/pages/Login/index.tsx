@@ -60,12 +60,12 @@ const Login = () => {
         setIsLoading(true);
 
         try {
-            const response = await api.post('/auth/login', {
+            await api.post('/auth/login', {
                 email: email.trim(),
                 password,
             });
 
-            login(response.data.access_token, rememberMe);
+            await login();
             navigate(locationState?.from || '/profile', { replace: true });
         } catch (requestError) {
             if (axios.isAxiosError(requestError)) {
