@@ -66,13 +66,8 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
-        const token =
-            localStorage.getItem('accessToken') ||
-            sessionStorage.getItem('accessToken');
-
         const client = io(API_URL, {
-            transports: ['websocket'],
-            auth: token ? { token } : undefined,
+            withCredentials: true,
             query: { userId: String(user.id) },
         });
 

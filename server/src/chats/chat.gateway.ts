@@ -28,9 +28,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(private readonly jwtService: JwtService) {}
 
+  private extractTokenFromCookie(client: Socket): string | null {
+    const cookieHeader = client.handshake.headers.cookie;
+    
+    if (!cookieHeader) {
+      return null;
+    }
+
+    const token = cookieHeader
+      .split('; ')
+      .find((row) => row.startsWith('accessToken='))
+      ?.split('=')[1];
+
+    return token || null;
+  }
+
   async handleConnection(client: Socket) {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers.authorization?.split(' ')[1];
+      const token = this.extractTokenFromCookie(client);
       
       if (!token) {
         client.disconnect();
@@ -59,7 +74,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     try {
-      const token = client.handshake.auth?.token || client.handshake.headers.authorization?.split(' ')[1];
+      const token = this.extractTokenFromCookie(client);
       
       if (!token) return;
 
