@@ -8,13 +8,9 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-
 import { api } from '../api/api';
 
-export type UserRole =
-    | 'user'
-    | 'organizer'
-    | 'admin';
+export type UserRole = 'user' | 'organizer' | 'admin';
 
 export type CurrentUser = {
     id: number;
@@ -27,77 +23,27 @@ type AuthContextType = {
     isAuthenticated: boolean;
     user: CurrentUser | null;
     isLoading: boolean;
-    login: (
-        token: string,
-        rememberMe: boolean,
-    ) => void;
-    logout: () => void;
-    refreshUser: () => Promise<void>;
+    // login більше не приймає токен, ми просто рефрешимо юзера після успішного запиту
+    login: () => Promise<void>;
+    logout: () => Promise<void>;
 };
 
-const AuthContext =
-    createContext<AuthContextType | null>(
-        null,
-    );
+const AuthContext = createContext<AuthContextType | null>(null);
 
-type AuthProviderProps = {
-    children: ReactNode;
-};
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    // Зі старту ми не знаємо, чи залогінений юзер, тому ставимо isLoading = true
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [user, setUser] = useState<CurrentUser | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-const getStoredToken = () => {
-    return (
-        localStorage.getItem(
-            'accessToken',
-        ) ||
-        sessionStorage.getItem(
-            'accessToken',
-        )
-    );
-};
-
-export const AuthProvider = ({
-    children,
-}: AuthProviderProps) => {
-    const [isAuthenticated, setIsAuthenticated] =
-        useState(() =>
-            Boolean(getStoredToken()),
-        );
-
-    const [user, setUser] =
-        useState<CurrentUser | null>(
-            null,
-        );
-
-    const [isLoading, setIsLoading] =
-        useState(() =>
-            Boolean(getStoredToken()),
-        );
-
-    const refreshUser = useCallback(async (signal?: AbortSignal) => {
-        const token = getStoredToken();
-
-        if (!token) {
-            setUser(null);
-            setIsAuthenticated(false);
-            setIsLoading(false);
-            return;
-        }
-
+    const fetchUser = useCallback(async (signal?: AbortSignal) => {
         try {
-            const response = await api.get<CurrentUser>('/users/me', {
-                signal,
-            });
-
+            // Браузер сам підставить HttpOnly куку завдяки withCredentials: true
+            const response = await api.get<CurrentUser>('/users/me', { signal });
             setUser(response.data);
             setIsAuthenticated(true);
         } catch (error) {
-            if (axios.isCancel(error)) {
-                return;
-            }
-
-            localStorage.removeItem('accessToken');
-            sessionStorage.removeItem('accessToken');
-
+            if (axios.isCancel(error)) return;
             setUser(null);
             setIsAuthenticated(false);
         } finally {
@@ -106,67 +52,32 @@ export const AuthProvider = ({
     }, []);
 
     useEffect(() => {
-        const token = getStoredToken();
-
-        if (!token) {
-            return;
-        }
-
         const controller = new AbortController();
 
-        const loadInitialUser = async () => {
-            try {
-                const response = await api.get<CurrentUser>('/users/me', {
-                    signal: controller.signal,
-                });
-
-                setUser(response.data);
-                setIsAuthenticated(true);
-            } catch (error) {
-                if (axios.isCancel(error)) {
-                    return;
-                }
-
-                localStorage.removeItem('accessToken');
-                sessionStorage.removeItem('accessToken');
-
-                setUser(null);
-                setIsAuthenticated(false);
-            } finally {
-                setIsLoading(false);
-            }
+        const initAuth = async () => {
+            await fetchUser(controller.signal);
         };
 
-        void loadInitialUser();
+        initAuth();
 
         return () => {
             controller.abort();
         };
-    }, []);
+    }, [fetchUser]);
 
-    const login = useCallback(
-        (token: string, rememberMe: boolean) => {
-            localStorage.removeItem('accessToken');
-            sessionStorage.removeItem('accessToken');
+    const login = useCallback(async () => {
+        await fetchUser();
+    }, [fetchUser]);
 
-            const storage = rememberMe
-                ? localStorage
-                : sessionStorage;
-
-            storage.setItem('accessToken', token);
-
-            setIsAuthenticated(true);
-            void refreshUser();
-        },
-        [refreshUser],
-    );
-
-    const logout = useCallback(() => {
-        localStorage.removeItem('accessToken');
-        sessionStorage.removeItem('accessToken');
-
-        setUser(null);
-        setIsAuthenticated(false);
+    const logout = useCallback(async () => {
+        try {
+            // Кажемо беку знести куку
+            await api.post('/auth/logout');
+        } finally {
+            // Чистимо стейт незалежно від результату запиту
+            setUser(null);
+            setIsAuthenticated(false);
+        }
     }, []);
 
     const value = useMemo(
@@ -176,9 +87,8 @@ export const AuthProvider = ({
             isLoading,
             login,
             logout,
-            refreshUser: () => refreshUser(),
         }),
-        [isAuthenticated, user, isLoading, login, logout, refreshUser],
+        [isAuthenticated, user, isLoading, login, logout],
     );
 
     return (
@@ -191,12 +101,8 @@ export const AuthProvider = ({
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const context = useContext(AuthContext);
-
     if (!context) {
-        throw new Error(
-            'useAuth must be used inside AuthProvider',
-        );
+        throw new Error('useAuth must be used inside AuthProvider');
     }
-
     return context;
 };
